@@ -59,6 +59,9 @@ asyncio for concurrent streaming
 Whisper.cpp / Faster-Whisper (planned, Week 1–2)
 Silero VAD (planned, Week 2)
 Looking ahead
+
+
+
 Week 2: Connect transcribed text to a local Llama 3 model (Ollama/vLLM) pre-prompted with a negotiation persona; implement Silero VAD for end-of-speech detection; expose VAD/listening state to the frontend
 Week 3: Integrate zero-shot streaming TTS (XTTSv2 / Bark) conditioned on emotional baseline (calm vs. panicked); write chunked audio streaming logic back over WebRTC before the full sentence finishes generating
 Week 4 (Refine & Polish): Implement full-duplex interruption handling — instantly halt TTS generation and resume listening the moment the human speaks; expose latency stats (TTFT, end-to-end round trip) for the frontend dashboard
