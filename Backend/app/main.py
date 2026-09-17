@@ -1,7 +1,7 @@
 from aiohttp import web
 
 from app.config.settings import HOST, PORT
-
+from app.webrtc.server import offer
 
 async def health(request):
     return web.json_response({
@@ -14,7 +14,7 @@ def create_app():
     app = web.Application()
 
     app.router.add_get("/health", health)
-
+    app.router.add_post("/webrtc/offer", offer)
     return app
 
 
