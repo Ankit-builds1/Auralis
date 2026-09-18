@@ -1,19 +1,20 @@
 from aiortc import MediaStreamTrack
 
+from app.audio.processor import AudioProcessor
+
 
 class IncomingAudioTrack(MediaStreamTrack):
     """
     Receives audio frames from the browser.
 
-    Day 2:
-    - Receive frames
-    - Count frames
-    - Log basic information
+    Day 3:
+    - Receive audio frames
+    - Process frames through AudioProcessor
+    - Inspect basic metadata
 
     Later:
-    - Send frames to the audio pipeline
-    - VAD
-    - STT
+    - Voice Activity Detection
+    - Speech-to-Text
     - Emotion analysis
     """
 
@@ -23,15 +24,21 @@ class IncomingAudioTrack(MediaStreamTrack):
         super().__init__()
         self.source = source
         self.frame_count = 0
+        self.processor = AudioProcessor()
 
     async def recv(self):
         frame = await self.source.recv()
 
         self.frame_count += 1
 
+        metadata = self.processor.process_frame(frame)
+
         if self.frame_count % 50 == 0:
             print(
-                f"[AUDIO] Received {self.frame_count} frames"
+                f"[AUDIO] frames={metadata['frame_count']} "
+                f"sample_rate={metadata['sample_rate']} "
+                f"samples={metadata['samples']} "
+                f"pts={metadata['pts']}"
             )
 
         return frame
