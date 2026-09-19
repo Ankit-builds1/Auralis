@@ -21,3 +21,4 @@ def test_audio_processor_processes_frame():
     assert result["sample_rate"] == 16000
     assert result["samples"] == 160
     assert result["pts"] == 123
+    assert result["is_speech"] is True

@@ -7,15 +7,16 @@ class IncomingAudioTrack(MediaStreamTrack):
     """
     Receives audio frames from the browser.
 
-    Day 3:
+    Day 4:
     - Receive audio frames
     - Process frames through AudioProcessor
-    - Inspect basic metadata
+    - Run voice activity detection
+    - Inspect basic audio metadata
 
     Later:
-    - Voice Activity Detection
     - Speech-to-Text
     - Emotion analysis
+    - Streaming audio pipeline
     """
 
     kind = "audio"
@@ -38,7 +39,8 @@ class IncomingAudioTrack(MediaStreamTrack):
                 f"[AUDIO] frames={metadata['frame_count']} "
                 f"sample_rate={metadata['sample_rate']} "
                 f"samples={metadata['samples']} "
-                f"pts={metadata['pts']}"
+                f"pts={metadata['pts']} "
+                f"speech={metadata['is_speech']}"
             )
 
         return frame
