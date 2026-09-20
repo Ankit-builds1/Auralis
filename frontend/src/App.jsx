@@ -4,26 +4,45 @@ const BACKEND_URL = `${import.meta.env.VITE_BACKEND_URL}/webrtc/offer`;
 
 function App() {
   const [status, setStatus] = useState('idle');
+  const [error, setError] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false);
   const streamRef = useRef(null);
   const pcRef = useRef(null);
   const audioRef = useRef(null);
 
   const startMic = async () => {
+    setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       setStatus('mic active');
     } catch (err) {
       console.error('Mic error:', err);
-      setStatus('mic denied/error');
+      if (err.name === 'NotAllowedError') {
+        setError('Microphone permission denied. Please allow mic access in your browser settings.');
+      } else if (err.name === 'NotFoundError') {
+        setError('No microphone found. Please connect a microphone and try again.');
+      } else {
+        setError(`Could not access microphone: ${err.message}`);
+      }
+      setStatus('mic unavailable');
     }
   };
 
   const connectWebRTC = async () => {
+    setError(null);
+
     if (!streamRef.current) {
-      setStatus('start mic first');
+      setError('Start the microphone before connecting.');
       return;
     }
+
+    if (!import.meta.env.VITE_BACKEND_URL) {
+      setError('Backend URL is not configured. Check your .env file.');
+      return;
+    }
+
+    setIsConnecting(true);
 
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -42,17 +61,28 @@ function App() {
     });
 
     pc.onconnectionstatechange = () => {
-      console.log('Connection state:', pc.connectionState);
-      setStatus(`webrtc: ${pc.connectionState}`);
+      const state = pc.connectionState;
+      console.log('Connection state:', state);
+      setStatus(`webrtc: ${state}`);
+
+      if (state === 'failed') {
+        setError('Media connection failed. Peers may be on different networks, or a TURN relay is needed.');
+        setIsConnecting(false);
+      } else if (state === 'disconnected') {
+        setError('Connection lost. Try reconnecting.');
+        setIsConnecting(false);
+      } else if (state === 'connected') {
+        setIsConnecting(false);
+      }
     };
 
-    // Day 4: play the incoming audio instead of only logging it
     pc.ontrack = (event) => {
       console.log('Received remote track:', event.track);
       if (audioRef.current) {
         audioRef.current.srcObject = event.streams[0];
         audioRef.current.play().catch(err => {
           console.error('Audio playback failed:', err);
+          setError('Audio autoplay was blocked by the browser. Click anywhere on the page and reconnect.');
         });
       }
       setStatus('playing remote audio');
@@ -74,6 +104,11 @@ function App() {
       });
 
       if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('Signaling endpoint not found (404). Check the backend URL and route.');
+        } else if (res.status === 403) {
+          throw new Error('Request blocked (403). The backend may not allow this origin (CORS).');
+        }
         throw new Error(`Backend responded with ${res.status}`);
       }
 
@@ -84,7 +119,14 @@ function App() {
       setStatus('handshake complete — connected');
     } catch (err) {
       console.error('WebRTC handshake failed:', err);
-      setStatus(`error: ${err.message}`);
+      setIsConnecting(false);
+
+      if (err.message === 'Failed to fetch') {
+        setError('Could not reach the backend. Is the server running and the URL correct?');
+      } else {
+        setError(err.message);
+      }
+      setStatus('connection failed');
     }
   };
 
@@ -94,15 +136,35 @@ function App() {
     if (audioRef.current) {
       audioRef.current.srcObject = null;
     }
+    streamRef.current = null;
+    pcRef.current = null;
+    setError(null);
+    setIsConnecting(false);
     setStatus('idle');
   };
 
   return (
     <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
-      <h1>Auralis — Frontend Day 4</h1>
+      <h1>Auralis — Frontend</h1>
       <p>Status: {status}</p>
+
+      {error && (
+        <div style={{
+          padding: '12px 16px',
+          marginBottom: 16,
+          border: '1px solid #c33',
+          borderRadius: 4,
+          color: '#c33',
+          maxWidth: 520
+        }}>
+          {error}
+        </div>
+      )}
+
       <button onClick={startMic}>Start Mic</button>
-      <button onClick={connectWebRTC}>Connect to Backend</button>
+      <button onClick={connectWebRTC} disabled={isConnecting}>
+        {isConnecting ? 'Connecting...' : 'Connect to Backend'}
+      </button>
       <button onClick={stopMic}>Stop</button>
 
       <audio ref={audioRef} autoPlay playsInline />
