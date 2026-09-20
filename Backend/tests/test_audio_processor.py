@@ -22,3 +22,4 @@ def test_audio_processor_processes_frame():
     assert result["samples"] == 160
     assert result["pts"] == 123
     assert result["is_speech"] is True
+    assert result["latency_ms"] >= 0

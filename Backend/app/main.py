@@ -4,11 +4,13 @@ import aiohttp_cors
 from app.config.settings import HOST, PORT
 from app.webrtc.server import offer
 
+
 async def health(request):
     return web.json_response({
         "status": "ok",
         "service": "auralis-backend"
     })
+
 
 def create_app():
     app = web.Application()
@@ -23,6 +25,7 @@ def create_app():
             allow_credentials=True,
             expose_headers="*",
             allow_headers="*",
+            allow_methods=["POST", "OPTIONS"],
         )
     }
 

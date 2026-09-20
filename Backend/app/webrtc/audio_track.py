@@ -7,10 +7,11 @@ class IncomingAudioTrack(MediaStreamTrack):
     """
     Receives audio frames from the browser.
 
-    Day 4:
+    Day 5:
     - Receive audio frames
     - Process frames through AudioProcessor
     - Run voice activity detection
+    - Measure audio processing latency
     - Inspect basic audio metadata
 
     Later:
@@ -40,7 +41,8 @@ class IncomingAudioTrack(MediaStreamTrack):
                 f"sample_rate={metadata['sample_rate']} "
                 f"samples={metadata['samples']} "
                 f"pts={metadata['pts']} "
-                f"speech={metadata['is_speech']}"
+                f"speech={metadata['is_speech']} "
+                f"latency_ms={metadata['latency_ms']:.3f}"
             )
 
         return frame
