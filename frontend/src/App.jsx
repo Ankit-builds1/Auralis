@@ -1,5 +1,7 @@
 import { useState, useRef } from 'react';
 
+const BACKEND_URL = `${import.meta.env.VITE_BACKEND_URL}/webrtc/offer`;
+
 function App() {
   const [status, setStatus] = useState('idle');
   const streamRef = useRef(null);
@@ -22,7 +24,16 @@ function App() {
       return;
     }
 
-    const pc = new RTCPeerConnection();
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
+      ]
+    });
     pcRef.current = pc;
 
     streamRef.current.getTracks().forEach(track => {
@@ -34,13 +45,39 @@ function App() {
       setStatus(`webrtc: ${pc.connectionState}`);
     };
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    console.log('Generated SDP offer:', offer);
+    pc.ontrack = (event) => {
+      console.log('Received remote track:', event.track);
+      setStatus('receiving remote audio');
+    };
 
-    setStatus('offer created — check console');
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      console.log('Generated SDP offer:', offer);
+      setStatus('sending offer to backend...');
 
-    // TODO Day 3: send this offer to Siddhant's backend endpoint
+      const res = await fetch(BACKEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sdp: offer.sdp,
+          type: offer.type,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Backend responded with ${res.status}`);
+      }
+
+      const answer = await res.json();
+      console.log('Received SDP answer:', answer);
+
+      await pc.setRemoteDescription(answer);
+      setStatus('handshake complete — connected');
+    } catch (err) {
+      console.error('WebRTC handshake failed:', err);
+      setStatus(`error: ${err.message}`);
+    }
   };
 
   const stopMic = () => {
@@ -51,10 +88,10 @@ function App() {
 
   return (
     <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
-      <h1>Auralis — Frontend Day 2</h1>
+      <h1>Auralis — Frontend Day 3</h1>
       <p>Status: {status}</p>
       <button onClick={startMic}>Start Mic</button>
-      <button onClick={connectWebRTC}>Create WebRTC Offer</button>
+      <button onClick={connectWebRTC}>Connect to Backend</button>
       <button onClick={stopMic}>Stop</button>
     </div>
   );
