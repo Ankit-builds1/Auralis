@@ -6,6 +6,7 @@ function App() {
   const [status, setStatus] = useState('idle');
   const streamRef = useRef(null);
   const pcRef = useRef(null);
+  const audioRef = useRef(null);
 
   const startMic = async () => {
     try {
@@ -45,9 +46,16 @@ function App() {
       setStatus(`webrtc: ${pc.connectionState}`);
     };
 
+    // Day 4: play the incoming audio instead of only logging it
     pc.ontrack = (event) => {
       console.log('Received remote track:', event.track);
-      setStatus('receiving remote audio');
+      if (audioRef.current) {
+        audioRef.current.srcObject = event.streams[0];
+        audioRef.current.play().catch(err => {
+          console.error('Audio playback failed:', err);
+        });
+      }
+      setStatus('playing remote audio');
     };
 
     try {
@@ -83,16 +91,21 @@ function App() {
   const stopMic = () => {
     streamRef.current?.getTracks().forEach(track => track.stop());
     pcRef.current?.close();
+    if (audioRef.current) {
+      audioRef.current.srcObject = null;
+    }
     setStatus('idle');
   };
 
   return (
     <div style={{ padding: 40, fontFamily: 'sans-serif' }}>
-      <h1>Auralis — Frontend Day 3</h1>
+      <h1>Auralis — Frontend Day 4</h1>
       <p>Status: {status}</p>
       <button onClick={startMic}>Start Mic</button>
       <button onClick={connectWebRTC}>Connect to Backend</button>
       <button onClick={stopMic}>Stop</button>
+
+      <audio ref={audioRef} autoPlay playsInline />
     </div>
   );
 }
