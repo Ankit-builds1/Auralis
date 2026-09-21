@@ -1,67 +1,86 @@
-# Auralis — Backend
+# Auralis: Frontend + Backend (WebRTC Foundation)
 
-Real-time Voice-to-Voice (V2V) Emotion Engine — Backend module (Python, aiortc, Streaming AI Pipeline).
+Real-time Voice-to-Voice (V2V) Emotion Engine, Week 1 module (React + WebRTC frontend, aiortc backend).
 
-Part of Infotact Solutions' Advanced Generative AI Engineering internship (Project 2 of 3). Team of 3, role-swapped from OmniSight — this project: frontend/streaming UI (Teammate), backend/streaming (this module), audio ML (Teammate).
+Part of Infotact Solutions' Advanced Generative AI Engineering internship (Project 2 of 3). Team of 3, role-swapped from OmniSight. Project roles: **frontend/streaming UI**, backend/streaming (Siddhant), audio ML (Priya). For Week 1, the WebRTC backend was also built as part of this module.
 
-What Auralis does
+## What Auralis does
 
-Most conversational AI pipelines (STT → LLM → TTS) take 3-5 seconds and strip out emotional tone entirely. Auralis fixes both: it streams audio in real time over WebRTC, detects the speaker's emotional state (via a Wav2Vec2 sentiment classifier), and generates an emotion-matched voice response with sub-800ms latency — closer to a real human conversation than a typical voice bot.
+Most conversational AI pipelines (STT → LLM → TTS) take 3-5 seconds and strip out emotional tone entirely. Auralis fixes both: it streams audio in real time over WebRTC, detects the speaker's emotional state (via Wav2Vec2 on the backend), and generates an emotion-matched voice response with sub-800ms latency, closer to a real human conversation than a typical voice bot.
 
-Use case: a Crisis Negotiation Training Simulator, where a trainee speaks in a panicked voice and the AI responds with a de-escalation tone that adapts to their emotional intensity.
+**Use case:** a Crisis Negotiation Training Simulator, where a trainee speaks in a panicked voice and the AI responds with a de-escalation tone that adapts to their emotional intensity.
 
-Backend responsibilities
+## Responsibilities
 
-This module owns the server-side real-time streaming pipeline:
+**Frontend (browser-side real-time audio pipeline)**
+- Capturing raw microphone audio via `getUserMedia`
+- Establishing a low-latency WebRTC peer connection to the backend (bypassing slow HTTP request/response cycles)
+- Streaming mic audio to the backend and playing back the AI's response audio as it arrives, in chunks
+- (Week 4) A cinematic, emotion-reactive UI: live waveform, live transcript, emotion meter, and latency stats
 
-Accepting the browser's WebRTC connection and exchanging SDP/ICE via a signaling endpoint
-Receiving raw microphone audio frames over the peer connection (via aiortc)
-Running Speech-to-Text (Whisper / Faster-Whisper) on incoming audio in near real time
-Running Voice Activity Detection (Silero VAD) to know exactly when the user stops speaking
-Feeding transcribed text + emotional context into a local LLM (Llama 3 via Ollama/vLLM) to generate a de-escalation response
-Generating emotion-conditioned speech via a streaming TTS model (XTTSv2 / Bark) and pushing audio back over WebRTC in byte-chunks
-Handling full-duplex interruption: instantly halting TTS generation if the user starts speaking mid-response
-Progress — Week 1
+**Backend (WebRTC server)**
+- Exposes a signaling endpoint (`POST /offer`) that accepts the browser's SDP offer and returns an answer
+- Receives the incoming mic audio track over the peer connection
+- Streams audio back to the browser over the same connection
+- Runs on port 8001, exposed publicly with ngrok for frontend testing
 
-Day 1 — Complete
+## Progress: Week 1
 
-Scaffolded the Python backend (FastAPI + aiortc), virtual environment and dependencies pinned
-Implemented the WebRTC signaling endpoint (/offer) to accept the frontend's SDP offer and return an SDP answer
-Verified a peer connection can be established end-to-end with the frontend's mic track (connection state logged to connected)
-Commit: Day 1: FastAPI + aiortc signaling server working (branch: backend)
+**Day 1: Complete**
+- Scaffolded the React app with Vite (`npm create vite@latest frontend -- --template react`), ESLint configured
+- Implemented microphone capture using `navigator.mediaDevices.getUserMedia({ audio: true })`
+- Verified raw `MediaStreamTrack` capture end-to-end: Start/Stop Mic controls, status display, and console-logged audio track confirming the browser has live mic access
+- Commit: `Day 1: React scaffold + mic capture working` (branch: `frontend`)
 
-Day 2 — Up next
+**Day 2: Complete**
+- Set up `RTCPeerConnection` and attached the captured mic track
+- Generated the SDP offer (after ICE gathering completes) and sent it to the backend's `POST /offer` endpoint
+- Built the backend signaling endpoint (aiortc) that returns the SDP answer; frontend applies it with `setRemoteDescription`
+- Backend served on port 8001 and exposed via ngrok; frontend reads its URL from `VITE_BACKEND_URL`
+- Commit: `Day 2: ...` (add your commit message)
 
-Attach an on_track handler to receive the incoming audio MediaStreamTrack
-Pipe raw audio frames into a buffer and confirm audio bytes are actually arriving from the browser
+**Day 3: Complete**
+- Confirmed audio flows from browser to backend over the peer connection
+- Connection state changes logged on the frontend; incoming audio track confirmed on the backend
+- Commit: `Day 3: ...` (add your commit message)
 
-Day 3 (planned)
+**Day 4: Complete**
+- Handled the return path: the backend streams audio back and the frontend plays it in real time through an `<audio>` element via `ontrack`, without waiting for a full response
+- Bi-directional audio stream working end-to-end
+- Commit: `Day 4: ...` (add your commit message)
 
-Wire the buffered audio into Whisper.cpp / Faster-Whisper for streaming transcription
-Log transcribed text in real time to confirm STT is working end-to-end
+**Day 5: Up next**
+- Error handling (mic permission denied, connection drops, backend unreachable)
+- Cleanup on Stop (close the peer connection, stop tracks)
+- Final Week 1 README update
 
-Day 4 (planned)
+## Week 1 goal (per official plan)
 
-Integrate Silero VAD to detect end-of-speech and trigger the response pipeline
-Begin measuring Time-to-First-Token (TTFT) from end-of-speech to first LLM token
+> **WebRTC Foundation:** Build the frontend React app and backend aiortc server to establish a bi-directional audio stream, bypassing slow HTTP protocols.
 
-Day 5 (planned)
+**Status:** Core goal achieved (Days 1-4). Only hardening and documentation remain (Day 5).
 
-Error handling (dropped connections, silence timeouts, reconnect logic) + this README's ongoing updates
-Week 1 goal (per official plan)
+## Tech stack
 
-WebRTC Foundation: Build the frontend React app and backend aiortc server to establish a bi-directional audio stream (bypassing slow HTTP protocols).
+- **Frontend:** React + Vite, native WebRTC APIs (`RTCPeerConnection`, `getUserMedia`), ESLint
+- **Backend:** Python, aiortc, exposed via ngrok for testing
 
-Tech stack
-Python, FastAPI
-aiortc (WebRTC peer connection, media handling)
-asyncio for concurrent streaming
-Whisper.cpp / Faster-Whisper (planned, Week 1–2)
-Silero VAD (planned, Week 2)
-Looking ahead
+## Running locally
 
+```bash
+# Backend (port 8001)
+# start your aiortc server, then expose it:
+ngrok http 8001
 
+# Frontend
+cd frontend
+# .env -> VITE_BACKEND_URL=<your ngrok URL>
+npm install
+npm run dev   # http://localhost:5173
+```
 
-Week 2: Connect transcribed text to a local Llama 3 model (Ollama/vLLM) pre-prompted with a negotiation persona; implement Silero VAD for end-of-speech detection; expose VAD/listening state to the frontend
-Week 3: Integrate zero-shot streaming TTS (XTTSv2 / Bark) conditioned on emotional baseline (calm vs. panicked); write chunked audio streaming logic back over WebRTC before the full sentence finishes generating
-Week 4 (Refine & Polish): Implement full-duplex interruption handling — instantly halt TTS generation and resume listening the moment the human speaks; expose latency stats (TTFT, end-to-end round trip) for the frontend dashboard
+## Looking ahead
+
+- **Week 2:** Reflect Voice Activity Detection (VAD) state from the backend, showing "listening / user speaking / AI speaking" in the UI
+- **Week 3:** Wire in real transcript + emotion data from the backend/ML pipeline; build interruption-handling UI (AI stops talking when the user speaks)
+- **Week 4 (Refine & Polish):** Cinematic waveform visualizer with emotion-driven color shifts, live transcript, emotion meter, and latency dashboard, the final polished frontend experience
