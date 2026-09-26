@@ -1,107 +1,145 @@
-# Auralis — Real-Time Voice-to-Voice Emotion Engine
+# Auralis — Backend
 
-**Week 1: WebRTC Foundation — Complete ✅**
+Real-time Voice-to-Voice Emotion Engine — **backend service**.
 
-Part of Infotact Solutions' Advanced Generative AI Engineering internship (Project 2 of 3). Team of 3, role-swapped from OmniSight. Roles: **frontend/streaming UI + Week 1 backend (this module)**, backend/streaming (Siddhant), audio ML (Priya).
+This is the backend component of **Auralis**, Project 2 of 3 in the Infotact Solutions "Advanced Generative AI Engineering" internship (team of 3). Auralis is a low-latency, real-time conversational audio system built for a crisis-negotiation training simulator use case: the browser streams microphone audio over WebRTC, and the backend processes it through a Voice Activity Detection (VAD) → speech segmentation → Speech-to-Text (STT) pipeline.
 
-## Why Auralis
+> 🎧 Frontend (Vite + React, mic capture + WebRTC handshake) lives in a separate repo/folder.
 
-Standard conversational AI pipelines (STT → LLM → TTS) run 3-5 seconds behind real speech and discard emotional tone entirely. Auralis closes both gaps: it streams audio over WebRTC instead of HTTP, detects the speaker's emotional state in real time via Wav2Vec2, and generates an emotion-matched voice response at sub-800ms latency — fast and expressive enough to feel like talking to a person, not a bot.
+## Status
 
-**Flagship use case:** a Crisis Negotiation Training Simulator — a trainee speaks in a panicked voice, and the AI responds with a de-escalation tone that adapts live to their emotional intensity.
+- ✅ **Week 1** — complete
+- 🔄 **Week 2** — in progress (~2 days in)
 
-## Week 1 Result
-
-A fully working, bi-directional, low-latency audio stream between browser and server — the real-time backbone the entire emotion pipeline depends on. **Goal met, ahead of hardening work most teams leave for later.**
+## Architecture
 
 ```
-🎙️  Browser mic  ──WebRTC──▶  aiortc server  ──WebRTC──▶  🔊 Browser playback
-                     (< 1 HTTP round trip, streamed both ways)
+Browser (mic)
+    │  WebRTC offer (SDP)
+    ▼
+POST /webrtc/offer  ──►  aiortc RTCPeerConnection
+    │
+    ▼
+Incoming audio track (per WebRTC frame)
+    │
+    ▼
+AudioProcessor
+    ├─ VoiceActivityDetector (Silero VAD, ONNX)
+    ├─ SpeechSegment buffer (start/accumulate/finish on silence)
+    └─ SpeechToText (faster-whisper) — runs once a segment finishes
+    │
+    ▼
+Events pushed back to frontend over the WebRTC DataChannel
+(status, per-frame audio/VAD metadata, vad state, errors)
 ```
 
-## What was built
+Key design point: the backend **does not** send the microphone audio back to the browser (avoids the delayed echo / voice-repetition problem). All feedback to the frontend goes out as JSON events on the DataChannel.
 
-**Frontend — browser-side real-time audio pipeline**
-- Live microphone capture via `getUserMedia`
-- `RTCPeerConnection` setup, SDP offer/answer exchange, ICE handling
-- Real-time playback of the AI's streamed response audio as it arrives — no waiting for a full response
-- Connection-state monitoring and graceful error handling (mic denied, dropped connection, unreachable backend)
-- Full mic/connection lifecycle cleanup on Stop
+## Tech Stack
 
-**Backend — WebRTC signaling & media server**
-- `POST /offer` signaling endpoint (aiortc) accepting the browser's SDP offer and returning an answer
-- Live ingestion of the incoming mic audio track
-- Streamed audio return path back to the browser over the same peer connection
-- Served on port 8001, tunneled via ngrok for external/frontend testing
+| Layer | Tech |
+|---|---|
+| Web server | `aiohttp` + `aiohttp-cors` |
+| Real-time transport | `aiortc` (WebRTC, Python) |
+| Voice Activity Detection | `silero-vad` (ONNX runtime) |
+| Speech-to-Text | `faster-whisper` (CTranslate2 backend) |
+| Audio resampling | `PyAV` (`av`) — 48kHz → 16kHz mono |
+| Numerics | `numpy`, `torch`, `torchaudio` |
+| Testing | `pytest`, `pytest-asyncio` |
+| Config | `python-dotenv` |
 
-## Day-by-day log
+Full pinned versions are in [`requirements.txt`](./requirements.txt).
 
-| Day | Focus | Status |
-|-----|-------|--------|
-| 1 | React + Vite scaffold, `getUserMedia` mic capture, Start/Stop controls | ✅ Complete |
-| 2 | `RTCPeerConnection` + SDP offer, backend `/offer` signaling endpoint, ngrok tunnel | ✅ Complete |
-| 3 | Verified live audio flow browser → backend over the peer connection | ✅ Complete |
-| 4 | Return-path streaming: backend → browser real-time playback via `ontrack` | ✅ Complete |
-| 5 | Error handling, connection-drop recovery, resource cleanup, docs polish | ✅ Complete |
+## Project Structure
 
-**Day 1**
-- Scaffolded with `npm create vite@latest frontend -- --template react`, ESLint configured
-- `navigator.mediaDevices.getUserMedia({ audio: true })` wired to Start/Stop Mic controls with live status display
-- Verified raw `MediaStreamTrack` capture end-to-end
-- Commit: `Day 1: React scaffold + mic capture wo
+```
+Backend/
+├── app/
+│   ├── main.py                  # aiohttp app + routes + CORS
+│   ├── config/
+│   │   └── settings.py          # HOST, PORT, ML_SERVICE_URL (from .env)
+│   ├── webrtc/
+│   │   ├── server.py            # /webrtc/offer handler, SDP offer/answer, track + datachannel wiring
+│   │   ├── connection.py        # RTCPeerConnection wrapper
+│   │   └── audio_track.py       # per-frame processing loop, sends events over DataChannel
+│   ├── audio/
+│   │   ├── processor.py         # VAD → segment → STT pipeline orchestration
+│   │   ├── vad/detector.py      # Silero VAD (16kHz, 512-sample chunks)
+│   │   ├── segments/speech_segment.py  # buffers frames for one utterance
+│   │   ├── pcm/converter.py     # PCM conversion helpers
+│   │   └── metrics/latency.py   # per-frame latency tracking
+│   └── stt/
+│       └── transcriber.py       # faster-whisper wrapper, 48kHz→16kHz resample + transcribe
+├── tests/                       # pytest suite (VAD, PCM, latency, segments, WebRTC, processor)
+├── requirements.txt
+├── .env.example
+└── pytest.ini
+```
 
-**Day 2**
-- Created `RTCPeerConnection`, attached the captured mic track
-- Generated SDP offer after ICE gathering completed, POSTed to backend `/offer`
-- Built the aiortc signaling endpoint; frontend applies the returned answer via `setRemoteDescription`
-- Backend live on port 8001, exposed via ngrok; frontend reads the tunnel URL from `VITE_BACKEND_URL`
-- Commit: Day 2a: Add RTCPeerConnection, attach mic track, generate SDP offer
-Day 2b: Build aiortc /offer signaling endpoint, expose backend via ngrok
+## API
 
-**Day 3**
-- Confirmed audio flows browser → backend over the live peer connection
-- Logged connection-state transitions on the frontend; confirmed incoming track on the backend
-- Commit: Day 3: Confirm mic audio streaming browser → backend, add connection-state logging
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/health` | Health check — `{"status": "ok", "service": "auralis-backend"}` |
+| `POST` | `/webrtc/offer` | Accepts a WebRTC SDP offer `{sdp, type}`, returns an SDP answer. Attaches the incoming mic track to the audio pipeline. |
 
-**Day 4**
-- Wired the return path: backend streams audio back, frontend plays it live via an `<audio>` element on `ontrack`
-- No buffering for a full response — playback starts as chunks arrive
-- Full bi-directional stream confirmed working end-to-end
-- Commit:Day 4: Stream backend audio back to browser, real-time playback via ontrack
+**DataChannel events** (server → browser, JSON):
+- `{"type": "status", "status": "connected"}`
+- `{"type": "audio_frame", "frame", "sample_rate", "samples", "pts", "is_speech", "segment_started", "segment_finished", "segment_frame_count", "latency_ms"}`
+- `{"type": "vad", "vad_state": "speaking" | "processing"}`
+- `{"type": "audio_error", "frame", "error"}`
 
-**Day 5**
-- Added error handling for mic-permission denial, connection drops, and unreachable backend
-- Cleaned up peer connection and released mic tracks properly on Stop
-- Finalized this README
-- Commit: Day 5: Add error handling for mic denial/connection drops, cleanup on Stop, finalize Week 1 README
+CORS is currently allowed for `http://localhost:5173` and `http://localhost:5174` (the Vite dev server).
 
-## Week 1 goal (official plan)
+## Setup
 
-> **WebRTC Foundation:** Build the frontend React app and backend aiortc server to establish a bi-directional audio stream, bypassing slow HTTP protocols.
-
-**Delivered.** Bi-directional streaming, live in both directions, with error handling and cleanup already in place — Week 2 starts from a stable foundation instead of a fragile prototype.
-
-## Tech stack
-
-- **Frontend:** React, Vite, native WebRTC APIs (`RTCPeerConnection`, `getUserMedia`), ESLint
-- **Backend:** Python, aiortc, ngrok (dev tunneling)
-
-## Running locally
+**Requirements:** Python 3.12+ (tested with a 3.12/3.14 venv), pip.
 
 ```bash
-# Backend (port 8001)
-# start the aiortc server, then tunnel it:
-ngrok http 8001
+# from the Backend/ folder
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # macOS/Linux
 
-# Frontend
-cd frontend
-# .env -> VITE_BACKEND_URL=<your ngrok URL>
-npm install
-npm run dev   # http://localhost:5173
+pip install -r requirements.txt
 ```
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and adjust as needed:
+
+```
+HOST=0.0.0.0
+PORT=8001
+ML_SERVICE_URL=http://localhost:9000
+```
+
+`.env` is git-ignored — never commit it.
+
+## Running
+
+```bash
+python -m app.main
+```
+
+Server starts on `HOST:PORT` (default `0.0.0.0:8001`). To expose it to the frontend during dev, tunnel it (e.g. `ngrok http 8001`) and point the frontend's `VITE_BACKEND_URL` at the public URL.
+
+## Testing
+
+```bash
+pytest
+```
+
+Covers VAD, PCM conversion, latency tracking, speech segmentation, and the WebRTC offer flow (`tests/`).
 
 ## Roadmap
 
-- **Week 2:** Live VAD (Voice Activity Detection) state from the backend — "listening / user speaking / AI speaking" reflected in the UI
-- **Week 3:** Real transcript + emotion data wired in from the ML pipeline; interruption-handling UI (AI stops talking when the user speaks)
-- **Week 4 — Refine & Polish:** Cinematic waveform visualizer with emotion-driven color shifts, live transcript, emotion meter, and latency dashboard — the final production-ready frontend experience
+- [x] **Week 1** — WebRTC signaling (`/webrtc/offer`), audio track ingestion, health endpoint
+- [ ] **Week 2** *(in progress)* — VAD-driven segment state streamed to frontend, STT integration hardening
+- [ ] **Week 3** — LLM response generation + emotion-aware context, interruption handling
+- [ ] **Week 4** — Streaming TTS output, latency dashboard, polish
+
+## Notes
+
+- STT currently runs the Whisper `base` model on CPU with `int8` compute for low resource usage — swap `model_size`/`device` in `app/audio/processor.py` if a GPU becomes available.
+- Silero VAD uses a fixed 512-sample chunk size at 16kHz; incoming WebRTC frames are buffered until a full chunk is available.
