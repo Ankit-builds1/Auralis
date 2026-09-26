@@ -1,25 +1,38 @@
 from app.audio.metrics.latency import LatencyTracker
 from app.audio.segments.speech_segment import SpeechSegment
 from app.audio.vad.detector import VoiceActivityDetector
+from app.stt.transcriber import SpeechToText
 
 
 class AudioProcessor:
     """
     Handles incoming audio frames.
 
-    Day 8:
-    - Receive audio frames
-    - Run voice activity detection
-    - Track processing latency
-    - Collect consecutive speech frames
-    - Detect speech segment start and end
+    Pipeline:
+
+        audio frame
+            ↓
+        VAD
+            ↓
+        speech segment
+            ↓
+        STT when speech ends
     """
 
     def __init__(self):
         self.frame_count = 0
+
         self.vad = VoiceActivityDetector()
+
         self.latency_tracker = LatencyTracker()
+
         self.speech_segment = SpeechSegment()
+
+        self.stt = SpeechToText(
+            model_size="base",
+            device="cpu",
+            compute_type="int8",
+        )
 
     def process_frame(self, frame):
         self.frame_count += 1
@@ -32,28 +45,102 @@ class AudioProcessor:
         segment_finished = False
         segment = []
 
+        transcript = ""
+
+        # -----------------------------------------
+        # SPEECH
+        # -----------------------------------------
+
         if is_speech:
+
             if not self.speech_segment.active:
+
                 self.speech_segment.start(frame)
+
                 segment_started = True
+
             else:
+
                 self.speech_segment.add(frame)
 
+        # -----------------------------------------
+        # SPEECH ENDED
+        # -----------------------------------------
+
         elif self.speech_segment.active:
+
             segment = self.speech_segment.finish()
+
             segment_finished = True
 
-        latency_ms = self.latency_tracker.stop(start_time)
+            print(
+                f"[AUDIO] Speech segment finished "
+                f"frames={len(segment)}"
+            )
+
+            # -------------------------------------
+            # STT
+            # -------------------------------------
+
+            try:
+
+                transcript = self.stt.transcribe(
+                    segment
+                )
+
+            except Exception as exc:
+
+                print(
+                    f"[STT ERROR] "
+                    f"{type(exc).__name__}: {exc}"
+                )
+
+        latency_ms = self.latency_tracker.stop(
+            start_time
+        )
 
         return {
             "frame_count": self.frame_count,
-            "sample_rate": getattr(frame, "sample_rate", None),
-            "samples": getattr(frame, "samples", None),
-            "pts": getattr(frame, "pts", None),
-            "is_speech": is_speech,
-            "segment_started": segment_started,
-            "segment_finished": segment_finished,
-            "segment": segment,
-            "segment_frame_count": len(segment),
-            "latency_ms": latency_ms,
+
+            "sample_rate":
+                getattr(
+                    frame,
+                    "sample_rate",
+                    None,
+                ),
+
+            "samples":
+                getattr(
+                    frame,
+                    "samples",
+                    None,
+                ),
+
+            "pts":
+                getattr(
+                    frame,
+                    "pts",
+                    None,
+                ),
+
+            "is_speech":
+                is_speech,
+
+            "segment_started":
+                segment_started,
+
+            "segment_finished":
+                segment_finished,
+
+            "segment":
+                segment,
+
+            "segment_frame_count":
+                len(segment),
+
+            "transcript":
+                transcript,
+
+            "latency_ms":
+                latency_ms,
         }
