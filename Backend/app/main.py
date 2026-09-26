@@ -25,8 +25,12 @@ def create_app():
             allow_credentials=True,
             expose_headers="*",
             allow_headers="*",
-            allow_methods=["POST", "OPTIONS"],
-        )
+        ),
+        "http://localhost:5174": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*",
+        ),
     }
 
     for route in list(app.router.routes()):
