@@ -6,17 +6,19 @@ from app.stt.transcriber import SpeechToText
 
 class AudioProcessor:
     """
-    Handles incoming audio frames.
+    Processes incoming WebRTC audio.
 
     Pipeline:
 
-        audio frame
-            ↓
-        VAD
-            ↓
-        speech segment
-            ↓
-        STT when speech ends
+        WebRTC audio frame
+                ↓
+             Silero VAD
+                ↓
+          SpeechSegment
+                ↓
+          Speech ends
+                ↓
+              Whisper
     """
 
     def __init__(self):
@@ -34,22 +36,39 @@ class AudioProcessor:
             compute_type="int8",
         )
 
+        print("[AUDIO] AudioProcessor initialized")
+
     def process_frame(self, frame):
+
         self.frame_count += 1
 
         start_time = self.latency_tracker.start()
+
+        # =====================================================
+        # VAD
+        # =====================================================
 
         is_speech = self.vad.process(frame)
 
         segment_started = False
         segment_finished = False
-        segment = []
 
+        segment = []
         transcript = ""
 
-        # -----------------------------------------
+        # =====================================================
+        # DEBUG
+        # =====================================================
+
+        print(
+            f"[AUDIO] frame={self.frame_count} "
+            f"speech={is_speech} "
+            f"segment_active={self.speech_segment.active}"
+        )
+
+        # =====================================================
         # SPEECH
-        # -----------------------------------------
+        # =====================================================
 
         if is_speech:
 
@@ -59,13 +78,17 @@ class AudioProcessor:
 
                 segment_started = True
 
+                print(
+                    "[AUDIO] Speech segment started"
+                )
+
             else:
 
                 self.speech_segment.add(frame)
 
-        # -----------------------------------------
-        # SPEECH ENDED
-        # -----------------------------------------
+        # =====================================================
+        # SILENCE / SPEECH ENDED
+        # =====================================================
 
         elif self.speech_segment.active:
 
@@ -78,69 +101,95 @@ class AudioProcessor:
                 f"frames={len(segment)}"
             )
 
-            # -------------------------------------
-            # STT
-            # -------------------------------------
+            # =================================================
+            # TRANSCRIPTION
+            # =================================================
 
-            try:
+            if len(segment) > 0:
 
-                transcript = self.stt.transcribe(
-                    segment
-                )
+                try:
 
-            except Exception as exc:
+                    print(
+                        "[STT] Starting transcription..."
+                    )
+
+                    transcript = self.stt.transcribe(
+                        segment
+                    )
+
+                    print(
+                        f"[STT] Transcript: {transcript}"
+                    )
+
+                except Exception as exc:
+
+                    print(
+                        "[STT ERROR] "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+
+            else:
 
                 print(
-                    f"[STT ERROR] "
-                    f"{type(exc).__name__}: {exc}"
+                    "[STT] Empty segment - skipping"
                 )
+
+        # =====================================================
+        # LATENCY
+        # =====================================================
 
         latency_ms = self.latency_tracker.stop(
             start_time
         )
 
+        # =====================================================
+        # RESULT
+        # =====================================================
+
         return {
             "frame_count": self.frame_count,
 
-            "sample_rate":
-                getattr(
-                    frame,
-                    "sample_rate",
-                    None,
-                ),
+            "sample_rate": getattr(
+                frame,
+                "sample_rate",
+                None,
+            ),
 
-            "samples":
-                getattr(
-                    frame,
-                    "samples",
-                    None,
-                ),
+            "samples": getattr(
+                frame,
+                "samples",
+                None,
+            ),
 
-            "pts":
-                getattr(
-                    frame,
-                    "pts",
-                    None,
-                ),
+            "pts": getattr(
+                frame,
+                "pts",
+                None,
+            ),
 
-            "is_speech":
-                is_speech,
+            "is_speech": is_speech,
 
-            "segment_started":
-                segment_started,
+            "segment_started": segment_started,
 
-            "segment_finished":
-                segment_finished,
+            "segment_finished": segment_finished,
 
-            "segment":
-                segment,
+            "segment": segment,
 
-            "segment_frame_count":
-                len(segment),
+            "segment_frame_count": len(segment),
 
-            "transcript":
-                transcript,
+            "transcript": transcript,
 
-            "latency_ms":
-                latency_ms,
+            "latency_ms": latency_ms,
         }
+
+    def reset(self):
+
+        print("[AUDIO] Resetting AudioProcessor")
+
+        self.frame_count = 0
+
+        self.vad.reset()
+
+        self.speech_segment = SpeechSegment()
+
+        print("[AUDIO] AudioProcessor reset")

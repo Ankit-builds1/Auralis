@@ -5,80 +5,123 @@ from silero_vad import load_silero_vad
 
 class VoiceActivityDetector:
     """
-    Real-time voice activity detector using Silero VAD.
+    Real-time Silero VAD for WebRTC audio.
 
-    Converts incoming aiortc audio frames to mono 16 kHz
-    and feeds Silero VAD exactly 512 samples at a time.
+    Browser / WebRTC:
+        48 kHz
+        960 samples/frame
+
+    VAD:
+        16 kHz
+        512 samples/chunk
+
+    This version:
+        - converts stereo -> mono
+        - converts PCM -> float32
+        - resamples 48 kHz -> 16 kHz
+        - buffers audio into 512-sample chunks
+        - uses speech/silence smoothing
+        - exposes the latest VAD probability
     """
 
     TARGET_SAMPLE_RATE = 16000
     VAD_CHUNK_SIZE = 512
-    SPEECH_THRESHOLD = 0.5
+
+    # Lower than the previous 0.35 because your logs
+    # show probabilities around 0.20-0.39 while speaking.
+    SPEECH_THRESHOLD = 0.20
+
+    # Require multiple speech chunks before starting.
+    SPEECH_CHUNKS_TO_START = 2
+
+    # Require sustained silence before ending.
+    SILENCE_CHUNKS_TO_END = 12
 
     def __init__(self):
-        self.speech_frames = 0
-        self.silence_frames = 0
 
-        # Buffer for audio that does not make a complete
-        # 512-sample Silero VAD chunk.
+        self.model = load_silero_vad(onnx=True)
+
         self.audio_buffer = np.empty(
             0,
             dtype=np.float32
         )
 
-        self.model = load_silero_vad(onnx=True)
+        self.in_speech = False
+
+        self.consecutive_speech = 0
+        self.consecutive_silence = 0
+
+        self.speech_frames = 0
+        self.silence_frames = 0
+
+        self.last_probability = 0.0
 
         print(
             "[VAD] Silero VAD initialized "
             f"(sample_rate={self.TARGET_SAMPLE_RATE}, "
-            f"chunk_size={self.VAD_CHUNK_SIZE})"
+            f"chunk_size={self.VAD_CHUNK_SIZE}, "
+            f"threshold={self.SPEECH_THRESHOLD}, "
+            f"start_chunks={self.SPEECH_CHUNKS_TO_START}, "
+            f"silence_chunks={self.SILENCE_CHUNKS_TO_END})"
         )
 
-    def _frame_to_tensor(self, frame):
-        """
-        Convert an aiortc AudioFrame into mono 16 kHz
-        float32 audio.
-        """
+    # ==========================================================
+    # Convert WebRTC frame -> mono 16 kHz float32
+    # ==========================================================
+
+    def _frame_to_audio(self, frame):
 
         if not hasattr(frame, "to_ndarray"):
             return None
 
-        audio = frame.to_ndarray()
+        try:
+            audio = frame.to_ndarray()
+        except Exception as exc:
+            print(
+                f"[VAD ERROR] to_ndarray failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            return None
 
         if audio is None or audio.size == 0:
             return None
 
         audio = np.asarray(audio)
 
-        # --------------------------------------------------
-        # Convert multi-channel audio to mono
-        # --------------------------------------------------
-
-        channels = 1
-
-        if getattr(frame, "layout", None):
-            try:
-                channels = len(frame.layout.channels)
-            except (TypeError, AttributeError):
-                channels = 1
+        # ------------------------------------------------------
+        # Convert channels to mono
+        # ------------------------------------------------------
 
         if audio.ndim == 2:
-            if channels > 1 and audio.shape[0] == channels:
-                audio = audio.mean(axis=0)
 
-            elif channels > 1 and audio.shape[1] == channels:
-                audio = audio.mean(axis=1)
+            try:
+                channels = len(frame.layout.channels)
+            except Exception:
+                channels = 1
+
+            if channels > 1:
+
+                if audio.shape[0] == channels:
+                    audio = audio.mean(axis=0)
+
+                elif audio.shape[1] == channels:
+                    audio = audio.mean(axis=1)
+
+                else:
+                    audio = audio.reshape(-1)
 
             else:
                 audio = audio.reshape(-1)
 
-        audio = audio.reshape(-1)
+        else:
+            audio = audio.reshape(-1)
 
-        # --------------------------------------------------
-        # Convert PCM integer -> float32 [-1, 1]
-        # --------------------------------------------------
+        # ------------------------------------------------------
+        # Convert PCM -> float32
+        # ------------------------------------------------------
 
         if np.issubdtype(audio.dtype, np.integer):
+
             info = np.iinfo(audio.dtype)
 
             max_value = max(
@@ -88,31 +131,32 @@ class VoiceActivityDetector:
 
             audio = (
                 audio.astype(np.float32)
-                / max_value
+                / float(max_value)
             )
 
         else:
+
             audio = audio.astype(
                 np.float32,
                 copy=False
             )
 
-        # --------------------------------------------------
-        # Get sample rate
-        # --------------------------------------------------
+        # ------------------------------------------------------
+        # Get original sample rate
+        # ------------------------------------------------------
 
         sample_rate = getattr(
             frame,
             "sample_rate",
-            self.TARGET_SAMPLE_RATE
+            48000
         )
 
         if not sample_rate or sample_rate <= 0:
-            sample_rate = self.TARGET_SAMPLE_RATE
+            sample_rate = 48000
 
-        # --------------------------------------------------
-        # Resample to 16 kHz
-        # --------------------------------------------------
+        # ------------------------------------------------------
+        # Resample -> 16 kHz
+        # ------------------------------------------------------
 
         if sample_rate != self.TARGET_SAMPLE_RATE:
 
@@ -121,25 +165,29 @@ class VoiceActivityDetector:
             if old_length == 0:
                 return None
 
-            new_length = max(
-                1,
-                int(
+            new_length = int(
+                round(
                     old_length
                     * self.TARGET_SAMPLE_RATE
                     / sample_rate
                 )
             )
 
-            old_positions = np.linspace(
-                0,
+            new_length = max(
                 1,
+                new_length
+            )
+
+            old_positions = np.linspace(
+                0.0,
+                1.0,
                 old_length,
                 endpoint=False
             )
 
             new_positions = np.linspace(
-                0,
-                1,
+                0.0,
+                1.0,
                 new_length,
                 endpoint=False
             )
@@ -148,54 +196,50 @@ class VoiceActivityDetector:
                 new_positions,
                 old_positions,
                 audio
-            ).astype(np.float32)
+            ).astype(
+                np.float32
+            )
+        print(
+    "[AUDIO LEVEL] "
+    f"min={audio.min():.6f} "
+    f"max={audio.max():.6f} "
+    f"mean={audio.mean():.6f} "
+    f"rms={np.sqrt(np.mean(audio ** 2)):.6f}"
+)
+        return audio
 
-        return torch.from_numpy(audio)
+    # ==========================================================
+    # Process one WebRTC frame
+    # ==========================================================
 
     def process(self, frame):
-        """
-        Process one incoming WebRTC audio frame.
 
-        The browser currently sends 640 samples per frame.
-        Silero VAD requires exactly 512 samples at 16 kHz.
+        audio = self._frame_to_audio(frame)
 
-        Therefore audio is buffered and processed in
-        512-sample chunks.
+        if audio is None or len(audio) == 0:
 
-        Returns:
-            bool: True if speech is detected.
-        """
-
-        audio = self._frame_to_tensor(frame)
-
-        if audio is None or audio.numel() == 0:
             self.silence_frames += 1
-            return False
 
-        # --------------------------------------------------
-        # Add incoming samples to buffer
-        # --------------------------------------------------
+            return self.in_speech
 
-        incoming = audio.numpy()
+        # ------------------------------------------------------
+        # Add audio to buffer
+        # ------------------------------------------------------
 
         self.audio_buffer = np.concatenate(
             (
                 self.audio_buffer,
-                incoming
+                audio
             )
         )
 
-        speech_detected = False
         chunks_processed = 0
 
-        # --------------------------------------------------
-        # Process complete 512-sample chunks
-        # --------------------------------------------------
+        # ------------------------------------------------------
+        # Process every complete 512-sample chunk
+        # ------------------------------------------------------
 
-        while (
-            len(self.audio_buffer)
-            >= self.VAD_CHUNK_SIZE
-        ):
+        while len(self.audio_buffer) >= self.VAD_CHUNK_SIZE:
 
             chunk = self.audio_buffer[
                 :self.VAD_CHUNK_SIZE
@@ -213,53 +257,185 @@ class VoiceActivityDetector:
             )
 
             # --------------------------------------------------
-            # Silero VAD
+            # Silero
             # --------------------------------------------------
 
-            with torch.no_grad():
-                speech_probability = self.model(
-                    tensor,
-                    self.TARGET_SAMPLE_RATE
+            try:
+
+                with torch.no_grad():
+
+                    probability = self.model(
+                        tensor,
+                        self.TARGET_SAMPLE_RATE
+                    )
+
+                if hasattr(
+                    probability,
+                    "item"
+                ):
+                    probability = probability.item()
+
+                probability = float(
+                    probability
                 )
 
-            if hasattr(
-                speech_probability,
-                "item"
-            ):
-                speech_probability = (
-                    speech_probability.item()
+            except Exception as exc:
+
+                print(
+                    "[VAD ERROR] Model failed: "
+                    f"{type(exc).__name__}: {exc}"
                 )
 
-            speech_probability = float(
-                speech_probability
-            )
-
-            is_speech = (
-                speech_probability
-                >= self.SPEECH_THRESHOLD
-            )
+                continue
 
             chunks_processed += 1
 
-            # --------------------------------------------------
-            # Track speech / silence
-            # --------------------------------------------------
+            self.last_probability = probability
+
+            is_speech = (
+                probability >= self.SPEECH_THRESHOLD
+            )
+
+            print(
+                "[VAD DEBUG] "
+                f"probability={probability:.4f} "
+                f"speech={is_speech} "
+                f"in_speech={self.in_speech} "
+                f"speech_count={self.consecutive_speech} "
+                f"silence_count={self.consecutive_silence}"
+            )
+
+            # ==================================================
+            # SPEECH
+            # ==================================================
 
             if is_speech:
-                speech_detected = True
+
+                self.consecutive_speech += 1
+
+                self.consecutive_silence = 0
 
                 self.speech_frames += 1
+
                 self.silence_frames = 0
 
+                # ----------------------------------------------
+                # Start speech after consecutive speech chunks
+                # ----------------------------------------------
+
+                if (
+                    not self.in_speech
+                    and
+                    self.consecutive_speech
+                    >= self.SPEECH_CHUNKS_TO_START
+                ):
+
+                    self.in_speech = True
+
+                    print(
+                        "[VAD] ============================="
+                    )
+
+                    print(
+                        "[VAD] SPEECH STARTED"
+                    )
+
+                    print(
+                        f"[VAD] probability={probability:.4f}"
+                    )
+
+                    print(
+                        "[VAD] ============================="
+                    )
+
+            # ==================================================
+            # SILENCE
+            # ==================================================
+
             else:
+
+                self.consecutive_speech = 0
+
                 self.silence_frames += 1
 
-        # --------------------------------------------------
-        # If no complete 512-sample chunk was available yet,
-        # keep waiting for the next WebRTC frame.
-        # --------------------------------------------------
+                if self.in_speech:
+
+                    self.consecutive_silence += 1
+
+                    print(
+                        "[VAD] silence "
+                        f"{self.consecutive_silence}/"
+                        f"{self.SILENCE_CHUNKS_TO_END}"
+                    )
+
+                    # ------------------------------------------
+                    # End speech after sustained silence
+                    # ------------------------------------------
+
+                    if (
+                        self.consecutive_silence
+                        >= self.SILENCE_CHUNKS_TO_END
+                    ):
+
+                        self.in_speech = False
+
+                        self.consecutive_silence = 0
+
+                        print(
+                            "[VAD] ============================="
+                        )
+
+                        print(
+                            "[VAD] SPEECH ENDED"
+                        )
+
+                        print(
+                            "[VAD] ============================="
+                        )
+
+        # ------------------------------------------------------
+        # No complete chunk yet
+        # ------------------------------------------------------
 
         if chunks_processed == 0:
-            return False
+            return self.in_speech
 
-        return speech_detected
+        return self.in_speech
+
+    # ==========================================================
+    # Optional helper
+    # ==========================================================
+
+    def get_state(self):
+
+        return {
+            "is_speech": self.in_speech,
+            "probability": self.last_probability,
+            "speech_frames": self.speech_frames,
+            "silence_frames": self.silence_frames,
+            "consecutive_speech": self.consecutive_speech,
+            "consecutive_silence": self.consecutive_silence,
+        }
+
+    # ==========================================================
+    # Reset
+    # ==========================================================
+
+    def reset(self):
+
+        self.audio_buffer = np.empty(
+            0,
+            dtype=np.float32
+        )
+
+        self.in_speech = False
+
+        self.consecutive_speech = 0
+        self.consecutive_silence = 0
+
+        self.speech_frames = 0
+        self.silence_frames = 0
+
+        self.last_probability = 0.0
+
+        print("[VAD] Reset")

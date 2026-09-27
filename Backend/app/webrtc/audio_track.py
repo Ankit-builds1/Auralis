@@ -6,12 +6,11 @@ from app.audio.processor import AudioProcessor
 
 class IncomingAudioTrack:
     """
-    Receives audio frames from the browser and continuously
-    processes them through the audio/VAD pipeline.
+    Receives microphone audio from the browser and continuously
+    processes it through the audio/VAD/STT pipeline.
 
-    IMPORTANT:
-    This class does NOT send the microphone audio back to the browser.
-    That prevents the delayed echo/voice repetition problem.
+    The processed microphone audio is NOT returned to the browser.
+    This prevents delayed audio/echo from being played back.
     """
 
     def __init__(self, source, data_channel=None):
@@ -20,22 +19,21 @@ class IncomingAudioTrack:
 
         self.frame_count = 0
         self.processor = AudioProcessor()
-
         self.running = True
 
         print("[AUDIO] IncomingAudioTrack initialized")
 
     def set_data_channel(self, channel):
+        """Attach the WebRTC DataChannel."""
         self.data_channel = channel
+
         print(
             f"[AUDIO] DataChannel attached: "
             f"{getattr(channel, 'label', 'unknown')}"
         )
 
     def send_event(self, payload):
-        """
-        Send a JSON event to the frontend DataChannel.
-        """
+        """Send a JSON event to the frontend DataChannel."""
 
         if self.data_channel is None:
             return
@@ -56,7 +54,7 @@ class IncomingAudioTrack:
 
     async def run(self):
         """
-        Continuously receive and process microphone frames.
+        Continuously receive microphone frames and process them.
         """
 
         print("[AUDIO] Audio processing loop started")
@@ -64,29 +62,45 @@ class IncomingAudioTrack:
         try:
             while self.running:
 
+                # -----------------------------------------
+                # RECEIVE AUDIO FRAME
+                # -----------------------------------------
+
                 try:
                     frame = await self.source.recv()
 
                 except asyncio.CancelledError:
+                    print(
+                        "[AUDIO] Processing task cancelled"
+                    )
                     break
 
                 except Exception as exc:
                     print(
-                        f"[AUDIO ERROR] source.recv() failed: "
+                        "[AUDIO ERROR] source.recv() failed: "
                         f"{type(exc).__name__}: {exc}"
                     )
                     break
 
                 self.frame_count += 1
 
+                # Print every frame so we can verify that
+                # audio is continuously reaching the backend.
+                print(
+                    f"[AUDIO DEBUG] "
+                    f"frame={self.frame_count} "
+                    f"samples={getattr(frame, 'samples', None)} "
+                    f"sample_rate={getattr(frame, 'sample_rate', None)}"
+                )
+
+                # -----------------------------------------
+                # PROCESS FRAME
+                # -----------------------------------------
+
                 try:
                     metadata = self.processor.process_frame(
                         frame
                     )
-
-                    # -----------------------------------------
-                    # Console output
-                    # -----------------------------------------
 
                     print(
                         f"[AUDIO] "
@@ -99,7 +113,7 @@ class IncomingAudioTrack:
                     )
 
                     # -----------------------------------------
-                    # Send frame/VAD information to frontend
+                    # SEND FRAME INFORMATION
                     # -----------------------------------------
 
                     self.send_event({
@@ -125,22 +139,71 @@ class IncomingAudioTrack:
                     })
 
                     # -----------------------------------------
-                    # VAD state
+                    # SPEECH STARTED
                     # -----------------------------------------
 
                     if metadata["segment_started"]:
+
+                        print(
+                            "[VAD] Speech started"
+                        )
+
                         self.send_event({
                             "type": "vad",
                             "vad_state": "speaking",
                         })
 
-                    elif metadata["segment_finished"]:
+                    # -----------------------------------------
+                    # SPEECH FINISHED
+                    # -----------------------------------------
+
+                    if metadata["segment_finished"]:
+
+                        print(
+                            "[VAD] Speech finished"
+                        )
+
                         self.send_event({
                             "type": "vad",
                             "vad_state": "processing",
                         })
 
+                        # -------------------------------------
+                        # STT RESULT
+                        # -------------------------------------
+
+                        transcript = metadata.get(
+                            "transcript",
+                            ""
+                        )
+
+                        if transcript:
+
+                            print(
+                                f"[STT] Transcript: "
+                                f"{transcript}"
+                            )
+
+                            self.send_event({
+                                "type": "transcript",
+                                "text": transcript,
+                            })
+
+                        else:
+
+                            print(
+                                "[STT] No transcript returned"
+                            )
+
+                        # Tell frontend that processing
+                        # of the speech segment is complete.
+                        self.send_event({
+                            "type": "vad",
+                            "vad_state": "idle",
+                        })
+
                 except Exception as exc:
+
                     print(
                         f"[AUDIO ERROR] "
                         f"Processing frame={self.frame_count}: "
@@ -154,6 +217,7 @@ class IncomingAudioTrack:
                     })
 
         finally:
+
             self.running = False
 
             print(
@@ -162,4 +226,13 @@ class IncomingAudioTrack:
             )
 
     def stop(self):
+        """
+        Stop audio processing.
+        """
+
+        if self.running:
+            print(
+                "[AUDIO] Stop requested"
+            )
+
         self.running = False
