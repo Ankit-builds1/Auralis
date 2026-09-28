@@ -179,11 +179,12 @@ function App() {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: 48000,
-          sampleSize: 16,
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
+          // Browser processing ON: boosts quiet mics (stronger signal for
+          // the VAD and Whisper), removes background noise, and prevents
+          // echo once TTS playback arrives in Week 3.
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
         },
         video: false,
       });
