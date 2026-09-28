@@ -199,13 +199,17 @@ class VoiceActivityDetector:
             ).astype(
                 np.float32
             )
-        print(
-    "[AUDIO LEVEL] "
-    f"min={audio.min():.6f} "
-    f"max={audio.max():.6f} "
-    f"mean={audio.mean():.6f} "
-    f"rms={np.sqrt(np.mean(audio ** 2)):.6f}"
-)
+
+        # Disabled: printed once per frame (~50/sec) and slowed
+        # processing enough to cause a growing backlog.
+        # print(
+        #     "[AUDIO LEVEL] "
+        #     f"min={audio.min():.6f} "
+        #     f"max={audio.max():.6f} "
+        #     f"mean={audio.mean():.6f} "
+        #     f"rms={np.sqrt(np.mean(audio ** 2)):.6f}"
+        # )
+
         return audio
 
     # ==========================================================
@@ -296,14 +300,16 @@ class VoiceActivityDetector:
                 probability >= self.SPEECH_THRESHOLD
             )
 
-            print(
-                "[VAD DEBUG] "
-                f"probability={probability:.4f} "
-                f"speech={is_speech} "
-                f"in_speech={self.in_speech} "
-                f"speech_count={self.consecutive_speech} "
-                f"silence_count={self.consecutive_silence}"
-            )
+            # Disabled: printed once per 32 ms chunk and slowed
+            # processing enough to cause a growing backlog.
+            # print(
+            #     "[VAD DEBUG] "
+            #     f"probability={probability:.4f} "
+            #     f"speech={is_speech} "
+            #     f"in_speech={self.in_speech} "
+            #     f"speech_count={self.consecutive_speech} "
+            #     f"silence_count={self.consecutive_silence}"
+            # )
 
             # ==================================================
             # SPEECH
@@ -362,11 +368,12 @@ class VoiceActivityDetector:
 
                     self.consecutive_silence += 1
 
-                    print(
-                        "[VAD] silence "
-                        f"{self.consecutive_silence}/"
-                        f"{self.SILENCE_CHUNKS_TO_END}"
-                    )
+                    # Disabled: printed on every silent chunk.
+                    # print(
+                    #     "[VAD] silence "
+                    #     f"{self.consecutive_silence}/"
+                    #     f"{self.SILENCE_CHUNKS_TO_END}"
+                    # )
 
                     # ------------------------------------------
                     # End speech after sustained silence
