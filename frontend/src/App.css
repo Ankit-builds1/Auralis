@@ -359,6 +359,32 @@ button {
   font-size: 13px;
 }
 
+/* LATENCY (Week 2 Day 4) */
+
+.latency-grid {
+  margin-top: 14px;
+}
+
+.transcript-latency {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Colour-coded against the project's sub-800ms target */
+.latency-good {
+  color: #00ff88;
+}
+
+.latency-warn {
+  color: #ffd166;
+}
+
+.latency-bad {
+  color: #ff7180;
+}
+
 /* EVENTS */
 
 .events {

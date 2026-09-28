@@ -5,6 +5,17 @@ const BACKEND_URL = `${import.meta.env.VITE_BACKEND_URL}/webrtc/offer`;
 
 const VAD_STATES = ['idle', 'listening', 'speaking', 'processing'];
 
+// Project target from the Auralis plan: sub-800 ms responses
+const LATENCY_TARGET_MS = 800;
+const LATENCY_WARN_MS = 1500;
+
+const getLatencyClass = (ms) => {
+  if (ms === null || ms === undefined) return '';
+  if (ms < LATENCY_TARGET_MS) return 'latency-good';
+  if (ms < LATENCY_WARN_MS) return 'latency-warn';
+  return 'latency-bad';
+};
+
 function App() {
   const [status, setStatus] = useState('idle');
   const [error, setError] = useState(null);
@@ -14,6 +25,7 @@ function App() {
   const [transcripts, setTranscripts] = useState([]);
   const [events, setEvents] = useState([]);
   const [frameCount, setFrameCount] = useState(0);
+  const [latencies, setLatencies] = useState([]);
 
   const streamRef = useRef(null);
   const pcRef = useRef(null);
@@ -21,10 +33,24 @@ function App() {
   const dataChannelRef = useRef(null);
   const transcriptEndRef = useRef(null);
 
+  // Arrival time of the most recent audio frame that contained speech
+  const lastSpeechAtRef = useRef(null);
+
   // Auto-scroll transcript to the newest line
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcripts]);
+
+  // ---------------------------------------------------------
+  // LATENCY STATS
+  // ---------------------------------------------------------
+
+  const lastLatency = latencies.length > 0 ? latencies[latencies.length - 1] : null;
+
+  const avgLatency =
+    latencies.length > 0
+      ? Math.round(latencies.reduce((sum, ms) => sum + ms, 0) / latencies.length)
+      : null;
 
   // ---------------------------------------------------------
   // EVENT LOGGER
@@ -41,10 +67,13 @@ function App() {
   // TRANSCRIPT HISTORY
   // ---------------------------------------------------------
 
-  const addTranscript = (text) => {
+  const addTranscript = (text, latencyMs) => {
     const time = new Date().toLocaleTimeString();
     setTranscripts((previous) =>
-      [...previous, { id: `${Date.now()}-${Math.random()}`, time, text }].slice(-50)
+      [
+        ...previous,
+        { id: `${Date.now()}-${Math.random()}`, time, text, latencyMs },
+      ].slice(-50)
     );
   };
 
@@ -56,7 +85,6 @@ function App() {
     setError(null);
 
     // Guard: do not create a second mic stream while one is running.
-    // A new stream would not be attached to the existing connection.
     if (streamRef.current) {
       addEvent('Microphone already active');
       return;
@@ -112,9 +140,12 @@ function App() {
     }
 
     switch (data.type) {
-      // ~50 per second: update the counter, but never log these
+      // ~50 per second: update counters, never log these
       case 'audio_frame':
         setFrameCount(data.frame ?? 0);
+        if (data.is_speech) {
+          lastSpeechAtRef.current = performance.now();
+        }
         return;
 
       case 'vad':
@@ -127,13 +158,31 @@ function App() {
         }
         return;
 
-      case 'transcript':
-        if (typeof data.text === 'string' && data.text.trim()) {
-          addTranscript(data.text.trim());
-          addEvent(`Transcript: ${data.text.trim()}`);
-          setStatus('transcript received');
+      case 'transcript': {
+        if (typeof data.text !== 'string' || !data.text.trim()) return;
+
+        const text = data.text.trim();
+
+        // End of speech -> transcript arrival
+        const latencyMs =
+          lastSpeechAtRef.current !== null
+            ? Math.round(performance.now() - lastSpeechAtRef.current)
+            : null;
+
+        lastSpeechAtRef.current = null;
+
+        addTranscript(text, latencyMs);
+
+        if (latencyMs !== null) {
+          setLatencies((previous) => [...previous, latencyMs].slice(-20));
+          addEvent(`Transcript (${latencyMs} ms): ${text}`);
+        } else {
+          addEvent(`Transcript: ${text}`);
         }
+
+        setStatus('transcript received');
         return;
+      }
 
       case 'audio_error':
         console.error('[Backend] Audio error:', data);
@@ -197,6 +246,7 @@ function App() {
     setIsConnecting(true);
     setVadState('idle');
     setFrameCount(0);
+    lastSpeechAtRef.current = null;
 
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -381,6 +431,7 @@ function App() {
     streamRef.current = null;
     pcRef.current = null;
     dataChannelRef.current = null;
+    lastSpeechAtRef.current = null;
 
     setError(null);
     setIsConnecting(false);
@@ -390,10 +441,13 @@ function App() {
     setFrameCount(0);
     setEvents([]);
     addEvent('Connection stopped');
-    // Transcript history is kept on purpose so you can review it after stopping
+    // Transcripts and latency history are kept for review after stopping
   };
 
-  const clearTranscripts = () => setTranscripts([]);
+  const clearTranscripts = () => {
+    setTranscripts([]);
+    setLatencies([]);
+  };
 
   // ---------------------------------------------------------
   // VAD DISPLAY
@@ -448,6 +502,10 @@ function App() {
                 <div className="metric-label">Frames</div>
                 <div className="metric-value">{frameCount}</div>
               </div>
+              <div className="metric">
+                <div className="metric-label">Utterances</div>
+                <div className="metric-value">{latencies.length}</div>
+              </div>
             </div>
 
             <div className="controls">
@@ -466,10 +524,26 @@ function App() {
               <h2>Voice Activity</h2>
               <span>VAD ENGINE</span>
             </div>
+
             <div className="vad-box">
               <div className="vad-state">
                 <div className="vad-icon">{getVadIcon()}</div>
                 <div className="vad-name">{getVadLabel()}</div>
+              </div>
+            </div>
+
+            <div className="connection-grid latency-grid">
+              <div className="metric">
+                <div className="metric-label">Speech → Text (last)</div>
+                <div className={`metric-value ${getLatencyClass(lastLatency)}`}>
+                  {lastLatency !== null ? `${lastLatency} ms` : '—'}
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Average</div>
+                <div className={`metric-value ${getLatencyClass(avgLatency)}`}>
+                  {avgLatency !== null ? `${avgLatency} ms` : '—'}
+                </div>
               </div>
             </div>
           </section>
@@ -480,7 +554,7 @@ function App() {
               <span>
                 STT OUTPUT
                 {transcripts.length > 0 && (
-                  <button className="btn-link" onClick={clearTranscripts}> · CLEAR</button>
+                  <button className="btn-link" onClick={clearTranscripts}>&nbsp;· CLEAR</button>
                 )}
               </span>
             </div>
@@ -493,6 +567,11 @@ function App() {
                   <div className="transcript-line" key={line.id}>
                     <span className="transcript-time">{line.time}</span>
                     <span>{line.text}</span>
+                    {line.latencyMs !== null && line.latencyMs !== undefined && (
+                      <span className={`transcript-latency ${getLatencyClass(line.latencyMs)}`}>
+                        {line.latencyMs} ms
+                      </span>
+                    )}
                   </div>
                 ))
               )}
