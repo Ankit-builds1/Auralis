@@ -9,12 +9,22 @@ const VAD_STATES = ['idle', 'listening', 'speaking', 'processing'];
 const LATENCY_TARGET_MS = 800;
 const LATENCY_WARN_MS = 1500;
 
+// Fallback frame length if the backend does not send samples/sample_rate
+const DEFAULT_FRAME_MS = 20;
+
 const getLatencyClass = (ms) => {
   if (ms === null || ms === undefined) return '';
   if (ms < LATENCY_TARGET_MS) return 'latency-good';
   if (ms < LATENCY_WARN_MS) return 'latency-warn';
   return 'latency-bad';
 };
+
+const formatMs = (ms) => (ms === null || ms === undefined ? '—' : `${ms} ms`);
+
+const average = (values) =>
+  values.length > 0
+    ? Math.round(values.reduce((sum, v) => sum + v, 0) / values.length)
+    : null;
 
 function App() {
   const [status, setStatus] = useState('idle');
@@ -26,6 +36,7 @@ function App() {
   const [events, setEvents] = useState([]);
   const [frameCount, setFrameCount] = useState(0);
   const [latencies, setLatencies] = useState([]);
+  const [segments, setSegments] = useState([]);
 
   const streamRef = useRef(null);
   const pcRef = useRef(null);
@@ -33,8 +44,17 @@ function App() {
   const dataChannelRef = useRef(null);
   const transcriptEndRef = useRef(null);
 
-  // Arrival time of the most recent audio frame that contained speech
+  // Day 4: arrival time of the most recent frame that contained speech
   const lastSpeechAtRef = useRef(null);
+
+  // Day 5: frame-based segment tracking (refs, because frames arrive ~50/sec)
+  const frameMsRef = useRef(DEFAULT_FRAME_MS);
+  const segmentRef = useRef({
+    startFrame: null,
+    lastSpeechFrame: null,
+    prevFinishFrame: null,
+  });
+  const pendingSegmentIdRef = useRef(null);
 
   // Auto-scroll transcript to the newest line
   useEffect(() => {
@@ -42,15 +62,15 @@ function App() {
   }, [transcripts]);
 
   // ---------------------------------------------------------
-  // LATENCY STATS
+  // STATS
   // ---------------------------------------------------------
 
   const lastLatency = latencies.length > 0 ? latencies[latencies.length - 1] : null;
+  const avgLatency = average(latencies);
 
-  const avgLatency =
-    latencies.length > 0
-      ? Math.round(latencies.reduce((sum, ms) => sum + ms, 0) / latencies.length)
-      : null;
+  const transcribedCount = segments.filter((s) => s.transcribed).length;
+  const avgSilenceWait = average(segments.map((s) => s.silenceWaitMs));
+  const avgSpeech = average(segments.map((s) => s.speechMs));
 
   // ---------------------------------------------------------
   // EVENT LOGGER
@@ -75,6 +95,71 @@ function App() {
         { id: `${Date.now()}-${Math.random()}`, time, text, latencyMs },
       ].slice(-50)
     );
+  };
+
+  // ---------------------------------------------------------
+  // SEGMENT TRACKING (Day 5)
+  // ---------------------------------------------------------
+
+  const resetSegmentTracking = () => {
+    segmentRef.current = {
+      startFrame: null,
+      lastSpeechFrame: null,
+      prevFinishFrame: null,
+    };
+    pendingSegmentIdRef.current = null;
+  };
+
+  const trackSegment = (data) => {
+    const seg = segmentRef.current;
+
+    if (data.samples && data.sample_rate) {
+      frameMsRef.current = (data.samples / data.sample_rate) * 1000;
+    }
+
+    const frameMs = frameMsRef.current;
+
+    if (data.segment_started) {
+      seg.startFrame = data.frame;
+      seg.lastSpeechFrame = data.frame;
+    }
+
+    if (data.is_speech && seg.startFrame !== null) {
+      seg.lastSpeechFrame = data.frame;
+    }
+
+    if (data.segment_finished && seg.startFrame !== null) {
+      const record = {
+        id: `${Date.now()}-${Math.random()}`,
+        time: new Date().toLocaleTimeString(),
+        speechMs: Math.round((seg.lastSpeechFrame - seg.startFrame + 1) * frameMs),
+        silenceWaitMs: Math.round((data.frame - seg.lastSpeechFrame) * frameMs),
+        gapBeforeMs:
+          seg.prevFinishFrame !== null
+            ? Math.round((seg.startFrame - seg.prevFinishFrame) * frameMs)
+            : null,
+        transcribed: false,
+        text: '',
+      };
+
+      pendingSegmentIdRef.current = record.id;
+      setSegments((previous) => [...previous, record].slice(-20));
+
+      seg.prevFinishFrame = data.frame;
+      seg.startFrame = null;
+      seg.lastSpeechFrame = null;
+    }
+  };
+
+  const markSegmentTranscribed = (text) => {
+    const pendingId = pendingSegmentIdRef.current;
+    if (!pendingId) return;
+
+    setSegments((previous) =>
+      previous.map((s) => (s.id === pendingId ? { ...s, transcribed: true, text } : s))
+    );
+
+    pendingSegmentIdRef.current = null;
   };
 
   // ---------------------------------------------------------
@@ -146,6 +231,7 @@ function App() {
         if (data.is_speech) {
           lastSpeechAtRef.current = performance.now();
         }
+        trackSegment(data);
         return;
 
       case 'vad':
@@ -172,6 +258,7 @@ function App() {
         lastSpeechAtRef.current = null;
 
         addTranscript(text, latencyMs);
+        markSegmentTranscribed(text);
 
         if (latencyMs !== null) {
           setLatencies((previous) => [...previous, latencyMs].slice(-20));
@@ -247,6 +334,7 @@ function App() {
     setVadState('idle');
     setFrameCount(0);
     lastSpeechAtRef.current = null;
+    resetSegmentTracking();
 
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -432,6 +520,7 @@ function App() {
     pcRef.current = null;
     dataChannelRef.current = null;
     lastSpeechAtRef.current = null;
+    resetSegmentTracking();
 
     setError(null);
     setIsConnecting(false);
@@ -441,12 +530,13 @@ function App() {
     setFrameCount(0);
     setEvents([]);
     addEvent('Connection stopped');
-    // Transcripts and latency history are kept for review after stopping
+    // Transcripts, latency and audit history are kept for review after stopping
   };
 
-  const clearTranscripts = () => {
+  const clearHistory = () => {
     setTranscripts([]);
     setLatencies([]);
+    setSegments([]);
   };
 
   // ---------------------------------------------------------
@@ -482,6 +572,8 @@ function App() {
         </header>
 
         <div className="dashboard-grid">
+
+          {/* CONNECTION */}
 
           <section className="card">
             <div className="card-title">
@@ -519,6 +611,8 @@ function App() {
             {error && <div className="error-box">⚠ {error}</div>}
           </section>
 
+          {/* VOICE ACTIVITY + LATENCY */}
+
           <section className="card">
             <div className="card-title">
               <h2>Voice Activity</h2>
@@ -536,17 +630,19 @@ function App() {
               <div className="metric">
                 <div className="metric-label">Speech → Text (last)</div>
                 <div className={`metric-value ${getLatencyClass(lastLatency)}`}>
-                  {lastLatency !== null ? `${lastLatency} ms` : '—'}
+                  {formatMs(lastLatency)}
                 </div>
               </div>
               <div className="metric">
                 <div className="metric-label">Average</div>
                 <div className={`metric-value ${getLatencyClass(avgLatency)}`}>
-                  {avgLatency !== null ? `${avgLatency} ms` : '—'}
+                  {formatMs(avgLatency)}
                 </div>
               </div>
             </div>
           </section>
+
+          {/* LIVE TRANSCRIPT */}
 
           <section className="card full">
             <div className="card-title">
@@ -554,7 +650,7 @@ function App() {
               <span>
                 STT OUTPUT
                 {transcripts.length > 0 && (
-                  <button className="btn-link" onClick={clearTranscripts}>&nbsp;· CLEAR</button>
+                  <button className="btn-link" onClick={clearHistory}>&nbsp;· CLEAR</button>
                 )}
               </span>
             </div>
@@ -578,6 +674,73 @@ function App() {
               <div ref={transcriptEndRef} />
             </div>
           </section>
+
+          {/* TRANSCRIPTION AUDIT (Day 5) */}
+
+          <section className="card full">
+            <div className="card-title">
+              <h2>Transcription Audit</h2>
+              <span>VAD SEGMENTS · SILENCE THRESHOLDS</span>
+            </div>
+
+            <div className="audit-summary">
+              <div className="metric">
+                <div className="metric-label">Segments detected</div>
+                <div className="metric-value">{segments.length}</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Transcribed</div>
+                <div className="metric-value">
+                  {segments.length > 0 ? `${transcribedCount} / ${segments.length}` : '—'}
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Avg silence wait</div>
+                <div className="metric-value">{formatMs(avgSilenceWait)}</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Avg speech</div>
+                <div className="metric-value">{formatMs(avgSpeech)}</div>
+              </div>
+            </div>
+
+            <div className="audit-table-wrap">
+              {segments.length === 0 ? (
+                <div className="transcript-placeholder">
+                  No speech segments yet. Speak a sentence, then pause.
+                </div>
+              ) : (
+                <table className="audit-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Time</th>
+                      <th>Speech</th>
+                      <th>Silence wait</th>
+                      <th>Gap before</th>
+                      <th>Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {segments.map((s, index) => (
+                      <tr key={s.id}>
+                        <td>{index + 1}</td>
+                        <td>{s.time}</td>
+                        <td>{formatMs(s.speechMs)}</td>
+                        <td>{formatMs(s.silenceWaitMs)}</td>
+                        <td>{formatMs(s.gapBeforeMs)}</td>
+                        <td className={s.transcribed ? 'audit-ok' : 'audit-miss'}>
+                          {s.transcribed ? `✓ ${s.text}` : '✗ empty'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
+
+          {/* SYSTEM EVENTS */}
 
           <section className="card full">
             <div className="card-title">
