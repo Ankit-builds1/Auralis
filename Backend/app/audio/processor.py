@@ -89,12 +89,14 @@ class AudioProcessor:
         # DEBUG
         # =====================================================
 
-        print(
-            f"[AUDIO] frame={self.frame_count} "
-            f"speech={is_speech} "
-            f"segment_active={self.speech_segment.active} "
-            f"silence_frames={self.silence_frames}"
-        )
+        # Disabled: printed once per frame (~50/sec) and slowed
+        # processing enough to cause a growing backlog.
+        # print(
+        #     f"[AUDIO] frame={self.frame_count} "
+        #     f"speech={is_speech} "
+        #     f"segment_active={self.speech_segment.active} "
+        #     f"silence_frames={self.silence_frames}"
+        # )
 
         # =====================================================
         # SPEECH
@@ -272,3 +274,4 @@ class AudioProcessor:
         self.speech_frames = 0
 
         print("[AUDIO] AudioProcessor reset")
+        
