@@ -12,11 +12,31 @@ const LATENCY_WARN_MS = 1500;
 // Fallback frame length if the backend does not send samples/sample_rate
 const DEFAULT_FRAME_MS = 20;
 
+// Day 6: stop waiting for ICE gathering after this long.
+// Host + STUN candidates normally arrive within a few hundred ms.
+const ICE_GATHER_TIMEOUT_MS = 3000;
+
+// Day 6: mic meter zones (level is 0..1, mapped from -60 dB..0 dB)
+const METER_GOOD_LEVEL = 0.25; // ~ -45 dB
+const METER_LOUD_LEVEL = 0.85; // ~ -9 dB
+
 const getLatencyClass = (ms) => {
   if (ms === null || ms === undefined) return '';
   if (ms < LATENCY_TARGET_MS) return 'latency-good';
   if (ms < LATENCY_WARN_MS) return 'latency-warn';
   return 'latency-bad';
+};
+
+const getMeterClass = (level) => {
+  if (level < METER_GOOD_LEVEL) return 'meter-quiet';
+  if (level < METER_LOUD_LEVEL) return 'meter-good';
+  return 'meter-loud';
+};
+
+const getMeterText = (level) => {
+  if (level < METER_GOOD_LEVEL) return 'quiet';
+  if (level < METER_LOUD_LEVEL) return 'good';
+  return 'loud';
 };
 
 const formatMs = (ms) => (ms === null || ms === undefined ? '—' : `${ms} ms`);
@@ -56,10 +76,29 @@ function App() {
   });
   const pendingSegmentIdRef = useRef(null);
 
+  // Day 6: connection timing + ICE candidate diagnostics
+  const connectStartedAtRef = useRef(null);
+  const iceCandidateCountsRef = useRef({});
+  const relayReadyRef = useRef(false);
+
+  // Day 6: mic level meter (updated directly on the DOM, not via state)
+  const audioCtxRef = useRef(null);
+  const meterRafRef = useRef(null);
+  const meterFillRef = useRef(null);
+  const meterLabelRef = useRef(null);
+
   // Auto-scroll transcript to the newest line
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcripts]);
+
+  // Stop the mic meter if the component unmounts
+  useEffect(() => {
+    return () => {
+      if (meterRafRef.current) cancelAnimationFrame(meterRafRef.current);
+      audioCtxRef.current?.close().catch(() => {});
+    };
+  }, []);
 
   // ---------------------------------------------------------
   // STATS
@@ -95,6 +134,77 @@ function App() {
         { id: `${Date.now()}-${Math.random()}`, time, text, latencyMs },
       ].slice(-50)
     );
+  };
+
+  // ---------------------------------------------------------
+  // MIC LEVEL METER (Day 6)
+  // ---------------------------------------------------------
+
+  const startMeter = (stream) => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+
+      audioCtxRef.current = ctx;
+
+      const buffer = new Float32Array(analyser.fftSize);
+
+      const tick = () => {
+        analyser.getFloatTimeDomainData(buffer);
+
+        let sum = 0;
+        for (let i = 0; i < buffer.length; i++) {
+          sum += buffer[i] * buffer[i];
+        }
+
+        const rms = Math.sqrt(sum / buffer.length);
+        const db = rms > 0 ? 20 * Math.log10(rms) : -100;
+        const level = Math.min(1, Math.max(0, (db + 60) / 60));
+
+        if (meterFillRef.current) {
+          meterFillRef.current.style.width = `${Math.round(level * 100)}%`;
+          meterFillRef.current.className = `mic-meter-fill ${getMeterClass(level)}`;
+        }
+
+        if (meterLabelRef.current) {
+          const dbText = db > -100 ? `${db.toFixed(0)} dB` : '−∞ dB';
+          meterLabelRef.current.textContent = `${dbText} · ${getMeterText(level)}`;
+        }
+
+        meterRafRef.current = requestAnimationFrame(tick);
+      };
+
+      tick();
+    } catch (err) {
+      console.warn('[METER] Could not start mic level meter:', err);
+      addEvent('Mic level meter unavailable');
+    }
+  };
+
+  const stopMeter = () => {
+    if (meterRafRef.current) {
+      cancelAnimationFrame(meterRafRef.current);
+      meterRafRef.current = null;
+    }
+
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+
+    if (meterFillRef.current) {
+      meterFillRef.current.style.width = '0%';
+      meterFillRef.current.className = 'mic-meter-fill';
+    }
+
+    if (meterLabelRef.current) {
+      meterLabelRef.current.textContent = 'mic off';
+    }
   };
 
   // ---------------------------------------------------------
@@ -195,6 +305,8 @@ function App() {
       console.log('[MIC] Settings:', track.getSettings());
       addEvent(`Microphone started: ${track.label}`);
       setStatus('mic active');
+
+      startMeter(stream);
     } catch (err) {
       console.error('[MIC] Microphone error:', err);
 
@@ -337,6 +449,10 @@ function App() {
     lastSpeechAtRef.current = null;
     resetSegmentTracking();
 
+    connectStartedAtRef.current = performance.now();
+    iceCandidateCountsRef.current = {};
+    relayReadyRef.current = false;
+
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -350,6 +466,19 @@ function App() {
 
     pcRef.current = pc;
     addEvent('PeerConnection created');
+
+    // Day 6: count candidate types (host / srflx / relay) for diagnostics
+    pc.onicecandidate = (event) => {
+      if (!event.candidate) return;
+
+      const type = event.candidate.type || 'unknown';
+      const counts = iceCandidateCountsRef.current;
+      counts[type] = (counts[type] || 0) + 1;
+
+      if (type === 'relay') {
+        relayReadyRef.current = true;
+      }
+    };
 
     pc.oniceconnectionstatechange = () => {
       const state = pc.iceConnectionState;
@@ -384,7 +513,17 @@ function App() {
 
       if (state === 'connected') {
         setIsConnecting(false);
-        addEvent('WebRTC connection established');
+
+        const seconds =
+          connectStartedAtRef.current !== null
+            ? ((performance.now() - connectStartedAtRef.current) / 1000).toFixed(1)
+            : null;
+
+        addEvent(
+          seconds !== null
+            ? `WebRTC connection established in ${seconds} s`
+            : 'WebRTC connection established'
+        );
       }
 
       if (state === 'failed') {
@@ -416,36 +555,50 @@ function App() {
       await pc.setLocalDescription(offer);
       addEvent('SDP offer created');
 
-      // Wait for ICE gathering (max 10s)
+      // Day 6: wait for ICE gathering, but stop early when possible:
+      // - gathering completes, or
+      // - a relay (TURN) candidate arrives, or
+      // - ICE_GATHER_TIMEOUT_MS passes
       await new Promise((resolve) => {
         if (pc.iceGatheringState === 'complete') {
+          addEvent('ICE gathering done (complete)');
           resolve();
           return;
         }
 
         let settled = false;
 
-        const finish = () => {
+        const finish = (reason) => {
           if (settled) return;
           settled = true;
           clearTimeout(timeout);
-          pc.removeEventListener('icegatheringstatechange', checkIceGathering);
+          clearInterval(relayCheck);
+          pc.removeEventListener('icegatheringstatechange', onGatheringChange);
+          addEvent(`ICE gathering done (${reason})`);
           resolve();
         };
 
-        const timeout = setTimeout(() => {
-          addEvent('ICE gathering timeout — continuing');
-          finish();
-        }, 10000);
-
-        const checkIceGathering = () => {
-          if (pc.iceGatheringState === 'complete') finish();
+        const onGatheringChange = () => {
+          if (pc.iceGatheringState === 'complete') finish('complete');
         };
 
-        pc.addEventListener('icegatheringstatechange', checkIceGathering);
+        // Poll the relay flag set by onicecandidate
+        const relayCheck = setInterval(() => {
+          if (relayReadyRef.current) finish('relay ready');
+        }, 50);
+
+        const timeout = setTimeout(() => {
+          finish(`timeout after ${ICE_GATHER_TIMEOUT_MS / 1000} s`);
+        }, ICE_GATHER_TIMEOUT_MS);
+
+        pc.addEventListener('icegatheringstatechange', onGatheringChange);
       });
 
-      addEvent('Browser ICE gathering complete');
+      const counts = iceCandidateCountsRef.current;
+      addEvent(
+        `ICE candidates: host=${counts.host || 0}, ` +
+        `srflx=${counts.srflx || 0}, relay=${counts.relay || 0}`
+      );
 
       if (!pc.localDescription) {
         throw new Error('Local SDP description was not created.');
@@ -501,6 +654,8 @@ function App() {
   // ---------------------------------------------------------
 
   const stopMic = () => {
+    stopMeter();
+
     if (dataChannelRef.current) {
       try { dataChannelRef.current.close(); } catch (err) { console.warn(err); }
     }
@@ -521,6 +676,7 @@ function App() {
     pcRef.current = null;
     dataChannelRef.current = null;
     lastSpeechAtRef.current = null;
+    connectStartedAtRef.current = null;
     resetSegmentTracking();
 
     setError(null);
@@ -598,6 +754,18 @@ function App() {
               <div className="metric">
                 <div className="metric-label">Utterances</div>
                 <div className="metric-value">{latencies.length}</div>
+              </div>
+            </div>
+
+            {/* MIC LEVEL METER (Day 6) */}
+
+            <div className="mic-meter">
+              <div className="mic-meter-header">
+                <span className="metric-label">Mic level</span>
+                <span className="mic-meter-label" ref={meterLabelRef}>mic off</span>
+              </div>
+              <div className="mic-meter-track">
+                <div className="mic-meter-fill" ref={meterFillRef} />
               </div>
             </div>
 

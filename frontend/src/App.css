@@ -1,9 +1,46 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
+/* =========================================================
+   THEME: MIDNIGHT AURORA
+   All colours live here. Change a value once and the whole
+   dashboard updates. Week 4 emotion colours can hook in here.
+   ========================================================= */
+
 :root {
+  /* Backgrounds */
+  --bg: #070a1a;
+  --surface: rgba(16, 21, 48, 0.72);
+  --surface-solid: #0e1433;
+  --surface-deep: #0a0f28;
+
+  /* Borders */
+  --border: rgba(139, 125, 255, 0.14);
+  --border-strong: rgba(139, 125, 255, 0.32);
+
+  /* Text */
+  --text: #e6e9ff;
+  --text-dim: #aab2e0;
+  --text-muted: #7880b3;
+  --text-faint: #4a5184;
+
+  /* Aurora accents */
+  --violet: #8b7dff;
+  --cyan: #38e1ff;
+  --magenta: #d77bff;
+  --aurora: linear-gradient(135deg, var(--violet) 0%, var(--cyan) 100%);
+
+  /* Status colours */
+  --good: #2dd4bf;
+  --warn: #fbbf24;
+  --bad: #fb7185;
+
+  /* Glows */
+  --glow-violet: rgba(139, 125, 255, 0.35);
+  --glow-cyan: rgba(56, 225, 255, 0.3);
+
   font-family: 'Inter', sans-serif;
-  color: #e8fff3;
-  background: #030605;
+  color: var(--text);
+  background: var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -17,9 +54,11 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at 15% 10%, rgba(0, 255, 136, 0.08), transparent 30%),
-    radial-gradient(circle at 85% 80%, rgba(0, 210, 255, 0.06), transparent 30%),
-    #030605;
+    radial-gradient(ellipse at 10% 0%, rgba(139, 125, 255, 0.22), transparent 45%),
+    radial-gradient(ellipse at 90% 100%, rgba(56, 225, 255, 0.16), transparent 45%),
+    radial-gradient(ellipse at 60% 40%, rgba(215, 123, 255, 0.07), transparent 50%),
+    var(--bg);
+  background-attachment: fixed;
 }
 
 button {
@@ -29,10 +68,6 @@ button {
 .auralis-app {
   min-height: 100vh;
   padding: 32px 20px 50px;
-  background:
-    linear-gradient(rgba(0, 255, 136, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 136, 0.018) 1px, transparent 1px);
-  background-size: 40px 40px;
 }
 
 .auralis-container {
@@ -49,13 +84,16 @@ button {
   padding: 22px 26px;
   margin-bottom: 22px;
 
-  background: rgba(7, 14, 11, 0.88);
-  border: 1px solid rgba(0, 255, 136, 0.18);
-  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 
   box-shadow:
-    0 0 30px rgba(0, 255, 136, 0.04),
-    inset 0 0 30px rgba(0, 255, 136, 0.015);
+    0 20px 60px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .brand {
@@ -70,16 +108,16 @@ button {
   display: grid;
   place-items: center;
 
-  border: 1px solid #00ff88;
-  border-radius: 12px;
+  border-radius: 14px;
+  background: var(--aurora);
 
-  color: #00ff88;
+  color: #0a0d24;
   font-size: 22px;
   font-weight: 800;
 
   box-shadow:
-    0 0 15px rgba(0, 255, 136, 0.25),
-    inset 0 0 15px rgba(0, 255, 136, 0.08);
+    0 0 24px var(--glow-violet),
+    0 0 40px var(--glow-cyan);
 }
 
 .brand h1 {
@@ -87,12 +125,16 @@ button {
   font-size: 24px;
   letter-spacing: 5px;
   font-weight: 800;
-  color: #f0fff7;
+
+  background: var(--aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .brand p {
   margin: 4px 0 0;
-  color: #789487;
+  color: var(--text-muted);
   font-size: 11px;
   letter-spacing: 2px;
 }
@@ -102,7 +144,7 @@ button {
   align-items: center;
   gap: 9px;
 
-  color: #00ff88;
+  color: var(--cyan);
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   text-transform: uppercase;
@@ -112,8 +154,14 @@ button {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #00ff88;
-  box-shadow: 0 0 12px #00ff88;
+  background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
 }
 
 /* GRID */
@@ -127,14 +175,23 @@ button {
 /* CARDS */
 
 .card {
-  background: rgba(6, 13, 10, 0.92);
-  border: 1px solid rgba(0, 255, 136, 0.14);
-  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
   padding: 24px;
 
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+
   box-shadow:
-    0 15px 50px rgba(0, 0, 0, 0.35),
-    inset 0 0 30px rgba(0, 255, 136, 0.012);
+    0 20px 60px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  transition: border-color 0.3s ease;
+}
+
+.card:hover {
+  border-color: var(--border-strong);
 }
 
 .card.full {
@@ -151,14 +208,14 @@ button {
 
 .card-title h2 {
   margin: 0;
-  color: #dffff0;
+  color: var(--text);
   font-size: 13px;
   letter-spacing: 2px;
   text-transform: uppercase;
 }
 
 .card-title span {
-  color: #526b5e;
+  color: var(--text-faint);
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
 }
@@ -173,13 +230,13 @@ button {
 
 .metric {
   padding: 17px;
-  background: #08100c;
-  border: 1px solid #10251a;
-  border-radius: 10px;
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
 .metric-label {
-  color: #5d7567;
+  color: var(--text-muted);
   font-size: 10px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -187,10 +244,79 @@ button {
 
 .metric-value {
   margin-top: 7px;
-  color: #00ff88;
+  color: var(--cyan);
   font-family: 'JetBrains Mono', monospace;
   font-size: 15px;
   font-weight: 500;
+}
+
+/* MIC LEVEL METER (Week 2 Day 6) */
+
+.mic-meter {
+  margin-top: 14px;
+  padding: 14px 17px;
+
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.mic-meter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.mic-meter-label {
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.mic-meter-track {
+  position: relative;
+  height: 10px;
+
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+
+  overflow: hidden;
+}
+
+/* Marker where the "good" zone starts (25% = METER_GOOD_LEVEL) */
+.mic-meter-track::before {
+  content: '';
+  position: absolute;
+  left: 25%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(56, 225, 255, 0.55);
+  z-index: 1;
+}
+
+.mic-meter-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--text-faint);
+  border-radius: 6px;
+  transition: width 0.08s linear;
+}
+
+.meter-quiet {
+  background: var(--text-faint);
+}
+
+.meter-good {
+  background: var(--aurora);
+  box-shadow: 0 0 12px var(--glow-cyan);
+}
+
+.meter-loud {
+  background: var(--bad);
+  box-shadow: 0 0 12px rgba(251, 113, 133, 0.4);
 }
 
 /* VAD */
@@ -201,9 +327,11 @@ button {
   align-items: center;
   justify-content: center;
 
-  border-radius: 12px;
-  border: 1px solid rgba(0, 255, 136, 0.18);
-  background: #07100c;
+  border-radius: 14px;
+  border: 1px solid var(--border-strong);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(139, 125, 255, 0.12), transparent 70%),
+    var(--surface-deep);
 }
 
 .vad-state {
@@ -218,9 +346,9 @@ button {
 .vad-name {
   font-family: 'JetBrains Mono', monospace;
   font-size: 14px;
-  color: #00ff88;
+  color: var(--text);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
 }
 
 /* BUTTONS */
@@ -235,11 +363,11 @@ button {
   flex: 1;
   padding: 12px 16px;
 
-  border-radius: 8px;
-  border: 1px solid #183b29;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
 
-  background: #09130e;
-  color: #b9d9c7;
+  background: var(--surface-deep);
+  color: var(--text-dim);
 
   font-size: 12px;
   font-weight: 600;
@@ -250,36 +378,40 @@ button {
 }
 
 .btn:hover {
-  border-color: #00ff88;
-  color: #00ff88;
-  box-shadow: 0 0 15px rgba(0, 255, 136, 0.12);
+  border-color: var(--violet);
+  color: var(--text);
+  box-shadow: 0 0 18px var(--glow-violet);
 }
 
 .btn-primary {
-  background: #00ff88;
-  color: #031008;
-  border-color: #00ff88;
+  background: var(--aurora);
+  color: #0a0d24;
+  border-color: transparent;
 }
 
 .btn-primary:hover {
-  background: #28ffa0;
-  color: #020704;
-  box-shadow: 0 0 22px rgba(0, 255, 136, 0.28);
+  color: #0a0d24;
+  filter: brightness(1.1);
+  box-shadow:
+    0 0 22px var(--glow-violet),
+    0 0 30px var(--glow-cyan);
 }
 
 .btn-danger {
-  border-color: #4a2025;
-  color: #ff7080;
+  border-color: rgba(251, 113, 133, 0.35);
+  color: var(--bad);
 }
 
 .btn-danger:hover {
-  border-color: #ff4d62;
-  color: #ff4d62;
+  border-color: var(--bad);
+  color: var(--bad);
+  box-shadow: 0 0 18px rgba(251, 113, 133, 0.25);
 }
 
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  filter: none;
 }
 
 /* Small text button used for "CLEAR" in the transcript card title */
@@ -288,7 +420,7 @@ button {
   border: none;
   padding: 0;
 
-  color: #526b5e;
+  color: var(--text-faint);
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
 
@@ -297,7 +429,7 @@ button {
 }
 
 .btn-link:hover {
-  color: #00ff88;
+  color: var(--cyan);
 }
 
 /* ERROR */
@@ -306,11 +438,11 @@ button {
   margin-top: 18px;
   padding: 13px 16px;
 
-  border: 1px solid rgba(255, 70, 90, 0.35);
-  border-radius: 9px;
+  border: 1px solid rgba(251, 113, 133, 0.35);
+  border-radius: 10px;
 
-  background: rgba(255, 50, 70, 0.06);
-  color: #ff7180;
+  background: rgba(251, 113, 133, 0.08);
+  color: var(--bad);
 
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
@@ -325,12 +457,12 @@ button {
 
   padding: 22px;
 
-  border: 1px solid #10291d;
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
 
-  background: #040a07;
+  background: var(--surface-deep);
 
-  color: #caffdf;
+  color: var(--text);
 
   font-size: 16px;
   line-height: 1.7;
@@ -342,19 +474,19 @@ button {
   gap: 14px;
   padding: 8px 0;
 
-  border-bottom: 1px solid rgba(0, 255, 136, 0.06);
+  border-bottom: 1px solid rgba(139, 125, 255, 0.08);
 }
 
 .transcript-time {
   min-width: 80px;
-  color: #385044;
+  color: var(--text-faint);
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
   white-space: nowrap;
 }
 
 .transcript-placeholder {
-  color: #385044;
+  color: var(--text-faint);
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
 }
@@ -374,15 +506,15 @@ button {
 
 /* Colour-coded against the project's sub-800ms target */
 .latency-good {
-  color: #00ff88;
+  color: var(--good);
 }
 
 .latency-warn {
-  color: #ffd166;
+  color: var(--warn);
 }
 
 .latency-bad {
-  color: #ff7180;
+  color: var(--bad);
 }
 
 /* TRANSCRIPTION AUDIT (Week 2 Day 5) */
@@ -398,9 +530,9 @@ button {
   max-height: 280px;
   overflow: auto;
 
-  border: 1px solid #10291d;
-  border-radius: 10px;
-  background: #040a07;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-deep);
   padding: 14px 18px;
 }
 
@@ -415,24 +547,24 @@ button {
 .audit-table th {
   position: sticky;
   top: 0;
-  background: #040a07;
+  background: var(--surface-deep);
 
   padding: 8px 10px;
   text-align: left;
 
-  color: #5d7567;
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 1.5px;
   text-transform: uppercase;
 
-  border-bottom: 1px solid #10291d;
+  border-bottom: 1px solid var(--border);
 }
 
 .audit-table td {
   padding: 9px 10px;
-  color: #91b5a0;
-  border-bottom: 1px solid rgba(0, 255, 136, 0.05);
+  color: var(--text-dim);
+  border-bottom: 1px solid rgba(139, 125, 255, 0.06);
   white-space: nowrap;
 }
 
@@ -441,11 +573,11 @@ button {
 }
 
 .audit-ok {
-  color: #00ff88 !important;
+  color: var(--good) !important;
 }
 
 .audit-miss {
-  color: #ff7180 !important;
+  color: var(--bad) !important;
 }
 
 /* EVENTS */
@@ -460,7 +592,7 @@ button {
   gap: 15px;
   padding: 10px 0;
 
-  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+  border-bottom: 1px solid rgba(139, 125, 255, 0.06);
 
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
@@ -468,20 +600,56 @@ button {
 
 .event-time {
   min-width: 80px;
-  color: #385044;
+  color: var(--text-faint);
 }
 
 .event-message {
-  color: #91b5a0;
+  color: var(--text-dim);
 }
 
 .footer {
   margin-top: 20px;
   text-align: center;
-  color: #31483a;
+  color: var(--text-faint);
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
   letter-spacing: 1px;
+}
+
+/* SCROLLBARS */
+
+.transcript-box::-webkit-scrollbar,
+.audit-table-wrap::-webkit-scrollbar,
+.events::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.transcript-box::-webkit-scrollbar-thumb,
+.audit-table-wrap::-webkit-scrollbar-thumb,
+.events::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 6px;
+}
+
+.transcript-box::-webkit-scrollbar-track,
+.audit-table-wrap::-webkit-scrollbar-track,
+.events::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ACCESSIBILITY: respect users who turn off animations */
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot {
+    animation: none;
+  }
+
+  .card,
+  .btn,
+  .mic-meter-fill {
+    transition: none;
+  }
 }
 
 /* RESPONSIVE */
