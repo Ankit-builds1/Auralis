@@ -282,6 +282,24 @@ button {
   cursor: not-allowed;
 }
 
+/* Small text button used for "CLEAR" in the transcript card title */
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+
+  color: #526b5e;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.btn-link:hover {
+  color: #00ff88;
+}
+
 /* ERROR */
 
 .error-box {
@@ -302,6 +320,8 @@ button {
 
 .transcript-box {
   min-height: 150px;
+  max-height: 300px;
+  overflow-y: auto;
 
   padding: 22px;
 
@@ -312,8 +332,25 @@ button {
 
   color: #caffdf;
 
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.7;
+}
+
+.transcript-line {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 8px 0;
+
+  border-bottom: 1px solid rgba(0, 255, 136, 0.06);
+}
+
+.transcript-time {
+  min-width: 80px;
+  color: #385044;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .transcript-placeholder {
