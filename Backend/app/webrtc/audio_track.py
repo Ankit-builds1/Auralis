@@ -4,6 +4,11 @@ import json
 from app.audio.processor import AudioProcessor
 
 
+# Print a progress line every N frames instead of every frame.
+# 250 frames x 20 ms = one line every 5 seconds.
+DEBUG_PRINT_EVERY = 250
+
+
 class IncomingAudioTrack:
     """
     Receives microphone audio from the browser and continuously
@@ -11,6 +16,10 @@ class IncomingAudioTrack:
 
     The processed microphone audio is NOT returned to the browser.
     This prevents delayed audio/echo from being played back.
+
+    Frame processing (VAD + Whisper) runs in a worker thread so the
+    asyncio event loop is never blocked. This keeps WebRTC receiving
+    audio and sending DataChannel messages while Whisper transcribes.
     """
 
     def __init__(self, source, data_channel=None):
@@ -84,32 +93,28 @@ class IncomingAudioTrack:
 
                 self.frame_count += 1
 
-                # Print every frame so we can verify that
-                # audio is continuously reaching the backend.
-                print(
-                    f"[AUDIO DEBUG] "
-                    f"frame={self.frame_count} "
-                    f"samples={getattr(frame, 'samples', None)} "
-                    f"sample_rate={getattr(frame, 'sample_rate', None)}"
-                )
+                # Periodic progress line (printing every frame
+                # at ~50 frames/sec slows the whole server down).
+                if self.frame_count % DEBUG_PRINT_EVERY == 0:
+                    print(
+                        f"[AUDIO DEBUG] "
+                        f"frame={self.frame_count} "
+                        f"samples={getattr(frame, 'samples', None)} "
+                        f"sample_rate={getattr(frame, 'sample_rate', None)}"
+                    )
 
                 # -----------------------------------------
-                # PROCESS FRAME
+                # PROCESS FRAME (in a worker thread)
                 # -----------------------------------------
 
                 try:
-                    metadata = self.processor.process_frame(
+                    # VAD + Whisper are blocking calls. Running them
+                    # in a thread keeps the event loop free, so WebRTC
+                    # keeps receiving audio and sending messages while
+                    # Whisper is transcribing.
+                    metadata = await asyncio.to_thread(
+                        self.processor.process_frame,
                         frame
-                    )
-
-                    print(
-                        f"[AUDIO] "
-                        f"frame={self.frame_count} "
-                        f"speech={metadata['is_speech']} "
-                        f"started={metadata['segment_started']} "
-                        f"finished={metadata['segment_finished']} "
-                        f"segment_frames={metadata['segment_frame_count']} "
-                        f"latency_ms={metadata['latency_ms']:.3f}"
                     )
 
                     # -----------------------------------------
@@ -145,7 +150,8 @@ class IncomingAudioTrack:
                     if metadata["segment_started"]:
 
                         print(
-                            "[VAD] Speech started"
+                            f"[VAD] Speech started "
+                            f"(frame={self.frame_count})"
                         )
 
                         self.send_event({
@@ -160,7 +166,10 @@ class IncomingAudioTrack:
                     if metadata["segment_finished"]:
 
                         print(
-                            "[VAD] Speech finished"
+                            f"[VAD] Speech finished "
+                            f"(frame={self.frame_count}, "
+                            f"segment_frames={metadata['segment_frame_count']}, "
+                            f"processing_ms={metadata['latency_ms']:.1f})"
                         )
 
                         self.send_event({

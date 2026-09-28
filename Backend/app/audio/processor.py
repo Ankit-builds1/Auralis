@@ -1,7 +1,26 @@
+from collections import deque
+
 from app.audio.metrics.latency import LatencyTracker
 from app.audio.segments.speech_segment import SpeechSegment
 from app.audio.vad.detector import VoiceActivityDetector
 from app.stt.transcriber import SpeechToText
+
+
+# =========================================================
+# SEGMENTATION SETTINGS (each WebRTC frame is 20 ms)
+# =========================================================
+
+# 25 x 20 ms = 500 ms of continuous silence ends a segment.
+# Short pauses between words stay inside the same segment.
+SILENCE_HANGOVER_FRAMES = 25
+
+# Keep the last 15 x 20 ms = 300 ms of audio from before speech
+# is detected, so the first syllable is not clipped.
+PRE_ROLL_FRAMES = 15
+
+# Segments with less than 10 x 20 ms = 200 ms of real speech
+# (coughs, clicks) are not sent to Whisper.
+MIN_SPEECH_FRAMES = 10
 
 
 class AudioProcessor:
@@ -15,6 +34,7 @@ class AudioProcessor:
              Silero VAD
                 ↓
           SpeechSegment
+     (pre-roll + silence hangover)
                 ↓
           Speech ends
                 ↓
@@ -35,6 +55,15 @@ class AudioProcessor:
             device="cpu",
             compute_type="int8",
         )
+
+        # Rolling buffer of recent non-speech frames (pre-roll)
+        self.pre_roll = deque(maxlen=PRE_ROLL_FRAMES)
+
+        # Consecutive silent frames inside an active segment
+        self.silence_frames = 0
+
+        # Frames actually detected as speech in the current segment
+        self.speech_frames = 0
 
         print("[AUDIO] AudioProcessor initialized")
 
@@ -63,7 +92,8 @@ class AudioProcessor:
         print(
             f"[AUDIO] frame={self.frame_count} "
             f"speech={is_speech} "
-            f"segment_active={self.speech_segment.active}"
+            f"segment_active={self.speech_segment.active} "
+            f"silence_frames={self.silence_frames}"
         )
 
         # =====================================================
@@ -72,67 +102,110 @@ class AudioProcessor:
 
         if is_speech:
 
+            self.silence_frames = 0
+
             if not self.speech_segment.active:
 
-                self.speech_segment.start(frame)
+                # Prepend the buffered audio so the start
+                # of the first word is not lost.
+                buffered = list(self.pre_roll)
+                self.pre_roll.clear()
+
+                if buffered:
+                    self.speech_segment.start(buffered[0])
+
+                    for buffered_frame in buffered[1:]:
+                        self.speech_segment.add(buffered_frame)
+
+                    self.speech_segment.add(frame)
+
+                else:
+                    self.speech_segment.start(frame)
+
+                self.speech_frames = 1
 
                 segment_started = True
 
                 print(
-                    "[AUDIO] Speech segment started"
+                    f"[AUDIO] Speech segment started "
+                    f"(pre-roll frames={len(buffered)})"
                 )
 
             else:
 
                 self.speech_segment.add(frame)
 
+                self.speech_frames += 1
+
         # =====================================================
-        # SILENCE / SPEECH ENDED
+        # SILENCE INSIDE AN ACTIVE SEGMENT (HANGOVER)
         # =====================================================
 
         elif self.speech_segment.active:
 
-            segment = self.speech_segment.finish()
+            # Keep short pauses inside the segment.
+            # Only end it after SILENCE_HANGOVER_FRAMES of silence.
+            self.speech_segment.add(frame)
 
-            segment_finished = True
+            self.silence_frames += 1
 
-            print(
-                f"[AUDIO] Speech segment finished "
-                f"frames={len(segment)}"
-            )
+            if self.silence_frames >= SILENCE_HANGOVER_FRAMES:
 
-            # =================================================
-            # TRANSCRIPTION
-            # =================================================
+                segment = self.speech_segment.finish()
 
-            if len(segment) > 0:
+                segment_finished = True
 
-                try:
-
-                    print(
-                        "[STT] Starting transcription..."
-                    )
-
-                    transcript = self.stt.transcribe(
-                        segment
-                    )
-
-                    print(
-                        f"[STT] Transcript: {transcript}"
-                    )
-
-                except Exception as exc:
-
-                    print(
-                        "[STT ERROR] "
-                        f"{type(exc).__name__}: {exc}"
-                    )
-
-            else:
+                self.silence_frames = 0
 
                 print(
-                    "[STT] Empty segment - skipping"
+                    f"[AUDIO] Speech segment finished "
+                    f"frames={len(segment)} "
+                    f"speech_frames={self.speech_frames}"
                 )
+
+                # =============================================
+                # TRANSCRIPTION
+                # =============================================
+
+                if self.speech_frames >= MIN_SPEECH_FRAMES:
+
+                    try:
+
+                        print(
+                            "[STT] Starting transcription..."
+                        )
+
+                        transcript = self.stt.transcribe(
+                            segment
+                        )
+
+                        print(
+                            f"[STT] Transcript: {transcript}"
+                        )
+
+                    except Exception as exc:
+
+                        print(
+                            "[STT ERROR] "
+                            f"{type(exc).__name__}: {exc}"
+                        )
+
+                else:
+
+                    print(
+                        "[STT] Segment too short - skipping"
+                    )
+
+                self.speech_frames = 0
+
+        # =====================================================
+        # SILENCE, NO ACTIVE SEGMENT
+        # =====================================================
+
+        else:
+
+            # Keep a rolling buffer for the next segment's pre-roll
+            self.pre_roll.append(frame)
 
         # =====================================================
         # LATENCY
@@ -191,5 +264,11 @@ class AudioProcessor:
         self.vad.reset()
 
         self.speech_segment = SpeechSegment()
+
+        self.pre_roll.clear()
+
+        self.silence_frames = 0
+
+        self.speech_frames = 0
 
         print("[AUDIO] AudioProcessor reset")
