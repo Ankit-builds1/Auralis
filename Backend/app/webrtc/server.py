@@ -5,6 +5,12 @@ from aiortc import RTCSessionDescription
 
 from app.webrtc.connection import WebRTCConnection
 from app.webrtc.audio_track import IncomingAudioTrack
+from app.webrtc.tts_track import TTSAudioTrack, play_test_tone
+
+
+# Day 1 test: play a short beep when the data channel opens, to prove
+# the outgoing audio path works. Set to False once real replies exist.
+PLAY_CONNECT_BEEP = True
 
 
 async def offer(request):
@@ -12,8 +18,8 @@ async def offer(request):
     Receives a WebRTC SDP offer from the browser
     and returns an SDP answer.
 
-    Incoming microphone audio is processed by the backend,
-    but is NOT sent back to the browser.
+    Incoming microphone audio is processed by the backend.
+    Outgoing AI speech is sent to the browser through tts_track.
     """
 
     params = await request.json()
@@ -30,6 +36,14 @@ async def offer(request):
     audio_processor = None
     processing_task = None
     data_channel = None
+
+    # --------------------------------------------------
+    # OUTGOING AUDIO TRACK (AI speech -> browser)
+    # Must be added before the answer is created.
+    # --------------------------------------------------
+
+    tts_track = TTSAudioTrack()
+    pc.addTrack(tts_track)
 
     offer_description = RTCSessionDescription(
         sdp=params["sdp"],
@@ -75,6 +89,11 @@ async def offer(request):
                     "status": "connected",
                 })
 
+            if PLAY_CONNECT_BEEP:
+                asyncio.create_task(
+                    play_test_tone(tts_track)
+                )
+
         @channel.on("close")
         def on_close():
 
@@ -84,7 +103,7 @@ async def offer(request):
             )
 
     # --------------------------------------------------
-    # AUDIO TRACK
+    # AUDIO TRACK (incoming microphone)
     # --------------------------------------------------
 
     @pc.on("track")
