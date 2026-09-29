@@ -12,11 +12,10 @@ const LATENCY_WARN_MS = 1500;
 // Fallback frame length if the backend does not send samples/sample_rate
 const DEFAULT_FRAME_MS = 20;
 
-// Day 6: stop waiting for ICE gathering after this long.
-// Host + STUN candidates normally arrive within a few hundred ms.
+// Stop waiting for ICE gathering after this long.
 const ICE_GATHER_TIMEOUT_MS = 3000;
 
-// Day 6: mic meter zones (level is 0..1, mapped from -60 dB..0 dB)
+// Mic meter zones (level is 0..1, mapped from -60 dB..0 dB)
 const METER_GOOD_LEVEL = 0.25; // ~ -45 dB
 const METER_LOUD_LEVEL = 0.85; // ~ -9 dB
 
@@ -25,6 +24,15 @@ const getLatencyClass = (ms) => {
   if (ms < LATENCY_TARGET_MS) return 'latency-good';
   if (ms < LATENCY_WARN_MS) return 'latency-warn';
   return 'latency-bad';
+};
+
+// Week 3 Day 1: colour for the "AI audio" status tile
+// (reuses the existing green / yellow / red classes)
+const getAiAudioClass = (state) => {
+  if (state === 'receiving') return 'latency-good';
+  if (state === 'track received' || state === 'stalled') return 'latency-warn';
+  if (state === 'blocked') return 'latency-bad';
+  return '';
 };
 
 const getMeterClass = (level) => {
@@ -58,6 +66,10 @@ function App() {
   const [latencies, setLatencies] = useState([]);
   const [segments, setSegments] = useState([]);
 
+  // Week 3 Day 1: AI audio (backend -> browser) status
+  const [aiAudio, setAiAudio] = useState('waiting');
+  const [aiPackets, setAiPackets] = useState(0);
+
   const streamRef = useRef(null);
   const pcRef = useRef(null);
   const audioRef = useRef(null);
@@ -87,16 +99,20 @@ function App() {
   const meterFillRef = useRef(null);
   const meterLabelRef = useRef(null);
 
+  // Week 3 Day 1: timer that reads WebRTC stats for the incoming AI audio
+  const statsTimerRef = useRef(null);
+
   // Auto-scroll transcript to the newest line
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [transcripts]);
 
-  // Stop the mic meter if the component unmounts
+  // Clean up the mic meter and stats timer if the component unmounts
   useEffect(() => {
     return () => {
       if (meterRafRef.current) cancelAnimationFrame(meterRafRef.current);
       audioCtxRef.current?.close().catch(() => {});
+      if (statsTimerRef.current) clearInterval(statsTimerRef.current);
     };
   }, []);
 
@@ -134,6 +150,57 @@ function App() {
         { id: `${Date.now()}-${Math.random()}`, time, text, latencyMs },
       ].slice(-50)
     );
+  };
+
+  // ---------------------------------------------------------
+  // AI AUDIO STATS (Week 3 Day 1)
+  // ---------------------------------------------------------
+
+  const stopStatsPolling = () => {
+    if (statsTimerRef.current) {
+      clearInterval(statsTimerRef.current);
+      statsTimerRef.current = null;
+    }
+  };
+
+  // Reads the browser's WebRTC statistics once per second and shows how
+  // many audio packets have arrived from the backend. This proves audio is
+  // reaching the browser even if the speakers are muted.
+  const startStatsPolling = (pc) => {
+    stopStatsPolling();
+
+    statsTimerRef.current = setInterval(async () => {
+      try {
+        const stats = await pc.getStats();
+
+        stats.forEach((report) => {
+          const kind = report.kind || report.mediaType;
+
+          if (report.type === 'inbound-rtp' && kind === 'audio') {
+            setAiPackets(report.packetsReceived ?? 0);
+          }
+        });
+      } catch (err) {
+        // The connection may be closing; ignore
+      }
+    }, 1000);
+  };
+
+  // Retry playback after the browser blocked autoplay
+  const enableAiAudio = () => {
+    if (!audioRef.current) return;
+
+    audioRef.current
+      .play()
+      .then(() => {
+        setAiAudio('receiving');
+        setError(null);
+        addEvent('AI audio enabled');
+      })
+      .catch((err) => {
+        console.error('[Audio] Retry failed:', err);
+        setError('Could not start AI audio. Check the browser volume and output device.');
+      });
   };
 
   // ---------------------------------------------------------
@@ -446,6 +513,8 @@ function App() {
     setIsConnecting(true);
     setVadState('idle');
     setFrameCount(0);
+    setAiAudio('waiting');
+    setAiPackets(0);
     lastSpeechAtRef.current = null;
     resetSegmentTracking();
 
@@ -467,7 +536,7 @@ function App() {
     pcRef.current = pc;
     addEvent('PeerConnection created');
 
-    // Day 6: count candidate types (host / srflx / relay) for diagnostics
+    // Count candidate types (host / srflx / relay) for diagnostics
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
 
@@ -513,6 +582,7 @@ function App() {
 
       if (state === 'connected') {
         setIsConnecting(false);
+        startStatsPolling(pc);
 
         const seconds =
           connectStartedAtRef.current !== null
@@ -528,24 +598,52 @@ function App() {
 
       if (state === 'failed') {
         setIsConnecting(false);
+        stopStatsPolling();
         setError('Media connection failed. Check the backend WebRTC connection and TURN configuration.');
       }
 
       if (state === 'disconnected' || state === 'closed') {
         setIsConnecting(false);
+        stopStatsPolling();
       }
     };
 
-    // Backend no longer echoes mic audio. This stays for Week 3,
-    // when the backend will stream TTS audio back.
+    // Week 3 Day 1: the backend sends AI speech as an audio track.
+    // The browser buffers and plays it; we show its status.
     pc.ontrack = (event) => {
-      addEvent('Remote audio track received');
+      addEvent(`Remote ${event.track.kind} track received`);
 
-      if (audioRef.current && event.streams && event.streams[0]) {
-        audioRef.current.srcObject = event.streams[0];
+      if (event.track.kind !== 'audio') return;
+
+      setAiAudio('track received');
+
+      // A remote track starts muted and unmutes once packets arrive
+      event.track.onunmute = () => {
+        setAiAudio((previous) => (previous === 'blocked' ? previous : 'receiving'));
+        addEvent('AI audio is flowing');
+      };
+
+      event.track.onmute = () => {
+        setAiAudio((previous) => (previous === 'blocked' ? previous : 'stalled'));
+        addEvent('AI audio stopped arriving');
+      };
+
+      if (!event.track.muted) {
+        setAiAudio('receiving');
+      }
+
+      const stream =
+        event.streams && event.streams[0]
+          ? event.streams[0]
+          : new MediaStream([event.track]);
+
+      if (audioRef.current) {
+        audioRef.current.srcObject = stream;
+
         audioRef.current.play().catch((err) => {
           console.error('[Audio] Playback failed:', err);
-          setError('Browser blocked remote audio playback. Click the page and reconnect.');
+          setAiAudio('blocked');
+          setError('Browser blocked AI audio. Click ENABLE AI AUDIO.');
         });
       }
     };
@@ -555,7 +653,7 @@ function App() {
       await pc.setLocalDescription(offer);
       addEvent('SDP offer created');
 
-      // Day 6: wait for ICE gathering, but stop early when possible:
+      // Wait for ICE gathering, but stop early when possible:
       // - gathering completes, or
       // - a relay (TURN) candidate arrives, or
       // - ICE_GATHER_TIMEOUT_MS passes
@@ -655,6 +753,7 @@ function App() {
 
   const stopMic = () => {
     stopMeter();
+    stopStatsPolling();
 
     if (dataChannelRef.current) {
       try { dataChannelRef.current.close(); } catch (err) { console.warn(err); }
@@ -685,6 +784,8 @@ function App() {
     setStatus('idle');
     setIceState('new');
     setFrameCount(0);
+    setAiAudio('waiting');
+    setAiPackets(0);
     setEvents([]);
     addEvent('Connection stopped');
     // Transcripts, latency and audit history are kept for review after stopping
@@ -755,6 +856,14 @@ function App() {
                 <div className="metric-label">Utterances</div>
                 <div className="metric-value">{latencies.length}</div>
               </div>
+              <div className="metric">
+                <div className="metric-label">AI audio</div>
+                <div className={`metric-value ${getAiAudioClass(aiAudio)}`}>{aiAudio}</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">AI packets</div>
+                <div className="metric-value">{aiPackets}</div>
+              </div>
             </div>
 
             {/* MIC LEVEL METER (Day 6) */}
@@ -775,6 +884,9 @@ function App() {
                 {isConnecting ? 'CONNECTING...' : 'CONNECT'}
               </button>
               <button className="btn btn-danger" onClick={stopMic}>STOP</button>
+              {aiAudio === 'blocked' && (
+                <button className="btn" onClick={enableAiAudio}>🔊 ENABLE AI AUDIO</button>
+              )}
             </div>
 
             {error && <div className="error-box">⚠ {error}</div>}
@@ -844,7 +956,7 @@ function App() {
             </div>
           </section>
 
-          {/* TRANSCRIPTION AUDIT (Day 5) */}
+          {/* TRANSCRIPTION AUDIT */}
 
           <section className="card full">
             <div className="card-title">
