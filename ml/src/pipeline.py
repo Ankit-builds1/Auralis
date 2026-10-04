@@ -15,9 +15,11 @@ def process_input(audio_path: str, transcript: str):
 
     emotion = predict_emotion_from_audio(audio_path)
 
-    response = generate_emotion_aware_response(
-        transcript=transcript,
-        emotion=emotion,
+    response = "".join(
+        generate_emotion_aware_response(
+            transcript=transcript,
+            emotion=emotion,
+        )
     )
 
     return {
