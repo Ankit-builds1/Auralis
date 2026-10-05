@@ -19,6 +19,34 @@ const ICE_GATHER_TIMEOUT_MS = 3000;
 const METER_GOOD_LEVEL = 0.25; // ~ -45 dB
 const METER_LOUD_LEVEL = 0.85; // ~ -9 dB
 
+// Fix #2: frames arrive ~50/sec. Only update the Frames counter every
+// N frames so the whole dashboard does not re-render 50 times a second.
+const FRAME_UI_EVERY = 10;
+
+// Fix #3: a finished segment that gets no transcript within this time is
+// treated as empty, so it cannot steal the next sentence's transcript.
+const TRANSCRIPT_TIMEOUT_MS = 5000;
+
+// Fix #4: ICE servers come from .env instead of being hardcoded.
+// If the TURN variables are missing, only STUN is used.
+const buildIceServers = () => {
+  const servers = [{ urls: 'stun:stun.l.google.com:19302' }];
+
+  const turnUrl = import.meta.env.VITE_TURN_URL;
+  const turnUsername = import.meta.env.VITE_TURN_USERNAME;
+  const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
+
+  if (turnUrl && turnUsername && turnCredential) {
+    servers.push({
+      urls: turnUrl,
+      username: turnUsername,
+      credential: turnCredential,
+    });
+  }
+
+  return servers;
+};
+
 const getLatencyClass = (ms) => {
   if (ms === null || ms === undefined) return '';
   if (ms < LATENCY_TARGET_MS) return 'latency-good';
@@ -86,7 +114,10 @@ function App() {
     lastSpeechFrame: null,
     prevFinishFrame: null,
   });
-  const pendingSegmentIdRef = useRef(null);
+
+  // Fix #3: queue of finished segments still waiting for a transcript
+  // (oldest first). Each entry: { id, finishedAt }
+  const pendingSegmentsRef = useRef([]);
 
   // Day 6: connection timing + ICE candidate diagnostics
   const connectStartedAtRef = useRef(null);
@@ -284,7 +315,7 @@ function App() {
       lastSpeechFrame: null,
       prevFinishFrame: null,
     };
-    pendingSegmentIdRef.current = null;
+    pendingSegmentsRef.current = [];
   };
 
   const trackSegment = (data) => {
@@ -319,7 +350,12 @@ function App() {
         text: '',
       };
 
-      pendingSegmentIdRef.current = record.id;
+      // Fix #3: add to the queue instead of overwriting a single pending id
+      pendingSegmentsRef.current.push({
+        id: record.id,
+        finishedAt: performance.now(),
+      });
+
       setSegments((previous) => [...previous, record].slice(-20));
 
       seg.prevFinishFrame = data.frame;
@@ -328,15 +364,23 @@ function App() {
     }
   };
 
+  // Fix #3: match the transcript to the oldest segment still waiting.
+  // Segments that waited longer than TRANSCRIPT_TIMEOUT_MS are dropped from
+  // the queue first (they stay "✗ empty" in the audit table).
   const markSegmentTranscribed = (text) => {
-    const pendingId = pendingSegmentIdRef.current;
-    if (!pendingId) return;
+    const now = performance.now();
+    const queue = pendingSegmentsRef.current;
+
+    while (queue.length > 0 && now - queue[0].finishedAt > TRANSCRIPT_TIMEOUT_MS) {
+      queue.shift();
+    }
+
+    const next = queue.shift();
+    if (!next) return;
 
     setSegments((previous) =>
-      previous.map((s) => (s.id === pendingId ? { ...s, transcribed: true, text } : s))
+      previous.map((s) => (s.id === next.id ? { ...s, transcribed: true, text } : s))
     );
-
-    pendingSegmentIdRef.current = null;
   };
 
   // ---------------------------------------------------------
@@ -406,13 +450,19 @@ function App() {
 
     switch (data.type) {
       // ~50 per second: update counters, never log these
-      case 'audio_frame':
-        setFrameCount(data.frame ?? 0);
+      case 'audio_frame': {
+        // Fix #2: throttle the Frames counter
+        const frame = data.frame ?? 0;
+        if (frame % FRAME_UI_EVERY === 0) {
+          setFrameCount(frame);
+        }
+
         if (data.is_speech) {
           lastSpeechAtRef.current = performance.now();
         }
         trackSegment(data);
         return;
+      }
 
       case 'vad':
         if (VAD_STATES.includes(data.vad_state)) {
@@ -522,16 +572,13 @@ function App() {
     iceCandidateCountsRef.current = {};
     relayReadyRef.current = false;
 
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject',
-        },
-      ],
-    });
+    // Fix #4: ICE servers from .env
+    const iceServers = buildIceServers();
+    if (iceServers.length === 1) {
+      addEvent('No TURN server in .env — using STUN only');
+    }
+
+    const pc = new RTCPeerConnection({ iceServers });
 
     pcRef.current = pc;
     addEvent('PeerConnection created');
@@ -854,7 +901,8 @@ function App() {
               </div>
               <div className="metric">
                 <div className="metric-label">Utterances</div>
-                <div className="metric-value">{latencies.length}</div>
+                {/* Fix #1: count transcripts, not latency values */}
+                <div className="metric-value">{transcripts.length}</div>
               </div>
               <div className="metric">
                 <div className="metric-label">AI audio</div>
