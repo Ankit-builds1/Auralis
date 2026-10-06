@@ -1,6 +1,40 @@
+import threading
+import time
+
 import av
 import numpy as np
 from faster_whisper import WhisperModel
+
+
+TARGET_SAMPLE_RATE = 16000
+
+# Words Whisper should expect. Helps it spell names and project terms
+# correctly ("Ankit Dash" instead of "Ankida", "BTech" instead of "BTEK").
+DEFAULT_INITIAL_PROMPT = (
+    "Ankit Dash, Priya, Siddhant, BTech, CSE, Auralis, "
+    "Centurion University, Bhubaneswar, Odisha."
+)
+
+# Whisper's own "this is not speech" check. A segment is dropped when
+# Whisper is fairly sure there is no speech AND is unsure about the text.
+NO_SPEECH_PROB_THRESHOLD = 0.6
+LOW_LOGPROB_THRESHOLD = -1.0
+
+# Phrases Whisper commonly invents for noise or silence. They are only
+# dropped when Whisper also had some doubt that there was speech, so a
+# real "Thank you." from the user still gets through.
+HALLUCINATION_PHRASES = {
+    "thank you",
+    "thank you.",
+    "thanks for watching",
+    "thanks for watching!",
+    "thank you for watching",
+    "thank you for watching.",
+    "you",
+    "bye",
+    "bye.",
+}
+HALLUCINATION_NO_SPEECH_PROB = 0.3
 
 
 class SpeechToText:
@@ -12,17 +46,25 @@ class SpeechToText:
 
     WebRTC audio is usually 48 kHz.
     Whisper expects 16 kHz mono float32 audio.
+
+    Usage:
+        stt = SpeechToText()
+        stt.warmup()            # call once at server start
+        text = stt.transcribe(frames)
     """
 
     def __init__(
         self,
-        model_size="base",
+        model_size="base.en",
         device="cpu",
         compute_type="int8",
+        beam_size=5,
+        initial_prompt=DEFAULT_INITIAL_PROMPT,
     ):
         print(
             f"[STT] Loading Whisper model "
-            f"(model={model_size}, device={device}, compute_type={compute_type})"
+            f"(model={model_size}, device={device}, "
+            f"compute_type={compute_type}, beam_size={beam_size})"
         )
 
         self.model = WhisperModel(
@@ -31,69 +73,103 @@ class SpeechToText:
             compute_type=compute_type,
         )
 
+        self.beam_size = beam_size
+        self.initial_prompt = initial_prompt
+
+        # Only one transcription at a time. Two sentences can finish
+        # close together, and both run in background threads.
+        self._lock = threading.Lock()
+
         print("[STT] Whisper model loaded")
 
-        # Convert incoming WebRTC audio to:
-        # mono + 16 kHz + signed 16-bit PCM
-        self.resampler = av.AudioResampler(
-            format="s16",
-            layout="mono",
-            rate=16000,
-        )
+    # ==========================================================
+    # Warm-up
+    # ==========================================================
+
+    def warmup(self):
+        """
+        Run one tiny transcription so the first real sentence is fast.
+        Call this once when the server starts (not on the first segment).
+        """
+        start = time.perf_counter()
+
+        silence = np.zeros(TARGET_SAMPLE_RATE, dtype=np.float32)  # 1 s
+
+        with self._lock:
+            segments, _ = self.model.transcribe(
+                silence,
+                language="en",
+                beam_size=1,
+                vad_filter=False,
+            )
+            list(segments)  # transcribe() is lazy; this makes it run
+
+        print(f"[STT] Warm-up done in {(time.perf_counter() - start) * 1000:.0f} ms")
+
+    # ==========================================================
+    # Frames -> audio
+    # ==========================================================
 
     def _frames_to_audio(self, frames):
         """
         Convert aiortc AudioFrames to a 16 kHz mono
         float32 NumPy waveform.
+
+        A NEW resampler is created for every segment, and it is flushed at
+        the end. With one shared resampler, a few leftover samples from the
+        previous sentence were added to the start of the next one, and the
+        last few milliseconds of every sentence were lost.
         """
 
         if not frames:
             print("[STT] No frames received")
             return None
 
+        resampler = av.AudioResampler(
+            format="s16",
+            layout="mono",
+            rate=TARGET_SAMPLE_RATE,
+        )
+
         audio_chunks = []
 
+        def collect(resampled):
+            if resampled is None:
+                return
+
+            if not isinstance(resampled, list):
+                resampled = [resampled]
+
+            for resampled_frame in resampled:
+                if resampled_frame is None:
+                    continue
+
+                array = resampled_frame.to_ndarray()
+
+                if array is None or array.size == 0:
+                    continue
+
+                array = np.asarray(array).reshape(-1)
+
+                # s16 -> float32 [-1, 1]
+                if np.issubdtype(array.dtype, np.integer):
+                    array = array.astype(np.float32) / 32768.0
+                else:
+                    array = array.astype(np.float32)
+
+                audio_chunks.append(array)
+
         for frame in frames:
-
             try:
-                # Resample 48 kHz -> 16 kHz
-                resampled_frames = self.resampler.resample(frame)
-
-                # Depending on PyAV version, this can be a frame
-                # or a list of frames.
-                if not isinstance(resampled_frames, list):
-                    resampled_frames = [resampled_frames]
-
-                for resampled_frame in resampled_frames:
-
-                    array = resampled_frame.to_ndarray()
-
-                    if array is None or array.size == 0:
-                        continue
-
-                    array = np.asarray(array)
-
-                    # Mono audio should normally be:
-                    # (1, samples)
-                    if array.ndim == 2:
-                        array = array[0]
-
-                    array = array.reshape(-1)
-
-                    # s16 -> float32 [-1, 1]
-                    if np.issubdtype(array.dtype, np.integer):
-                        array = (
-                            array.astype(np.float32) / 32768.0
-                        )
-                    else:
-                        array = array.astype(np.float32)
-
-                    audio_chunks.append(array)
-
+                collect(resampler.resample(frame))
             except Exception as exc:
-                print(
-                    f"[STT] Error converting frame: {exc}"
-                )
+                print(f"[STT] Error converting frame: {type(exc).__name__}: {exc}")
+
+        # Flush: get the samples still held inside the resampler
+        try:
+            collect(resampler.resample(None))
+        except Exception:
+            pass
 
         if not audio_chunks:
             print("[STT] No usable audio after resampling")
@@ -104,24 +180,63 @@ class SpeechToText:
         print(
             f"[STT] Prepared audio: "
             f"samples={len(audio)}, "
-            f"duration={len(audio) / 16000:.2f}s, "
-            f"sample_rate=16000"
+            f"duration={len(audio) / TARGET_SAMPLE_RATE:.2f}s, "
+            f"sample_rate={TARGET_SAMPLE_RATE}"
         )
 
         return audio
+
+    # ==========================================================
+    # Filtering
+    # ==========================================================
+
+    def _keep_segment(self, segment):
+        """Return False for text Whisper probably invented from noise."""
+        text = segment.text.strip()
+
+        if not text:
+            return False
+
+        no_speech_prob = getattr(segment, "no_speech_prob", 0.0) or 0.0
+        avg_logprob = getattr(segment, "avg_logprob", 0.0) or 0.0
+
+        # Whisper's standard rule: likely silence AND low confidence
+        if (
+            no_speech_prob > NO_SPEECH_PROB_THRESHOLD
+            and avg_logprob < LOW_LOGPROB_THRESHOLD
+        ):
+            print(
+                f"[STT] Dropped (no speech): '{text}' "
+                f"(no_speech_prob={no_speech_prob:.2f}, avg_logprob={avg_logprob:.2f})"
+            )
+            return False
+
+        # Typical hallucinations, only when Whisper also had some doubt
+        if (
+            text.lower() in HALLUCINATION_PHRASES
+            and no_speech_prob > HALLUCINATION_NO_SPEECH_PROB
+        ):
+            print(
+                f"[STT] Dropped (likely hallucination): '{text}' "
+                f"(no_speech_prob={no_speech_prob:.2f})"
+            )
+            return False
+
+        return True
+
+    # ==========================================================
+    # Transcribe
+    # ==========================================================
 
     def transcribe(self, frames):
         """
         Transcribe one completed speech segment.
 
         Returns:
-            str: recognized text
+            str: recognized text ("" if nothing usable)
         """
 
-        print(
-            f"[STT] Starting transcription "
-            f"for {len(frames)} frames"
-        )
+        print(f"[STT] Starting transcription for {len(frames)} frames")
 
         audio = self._frames_to_audio(frames)
 
@@ -129,33 +244,39 @@ class SpeechToText:
             print("[STT] Empty audio segment")
             return ""
 
+        start = time.perf_counter()
+
         try:
+            with self._lock:
+                segments, _ = self.model.transcribe(
+                    audio,
+                    language="en",
+                    beam_size=self.beam_size,
+                    initial_prompt=self.initial_prompt,
+                    # Each sentence is independent; do not let a wrong
+                    # earlier guess push later text in the wrong direction
+                    condition_on_previous_text=False,
+                    # One pass only. The default retries at higher
+                    # temperatures, which can triple the time on noise.
+                    temperature=0.0,
+                    vad_filter=False,  # our Silero VAD already did this
+                )
 
-            segments, info = self.model.transcribe(
-                audio,
-                language="en",
-                beam_size=1,
-                vad_filter=False,
-            )
-
-            text_parts = []
-
-            for segment in segments:
-                text = segment.text.strip()
-
-                if text:
-                    text_parts.append(text)
+                # transcribe() is lazy: the real work happens here,
+                # so keep it inside the lock
+                text_parts = [
+                    segment.text.strip()
+                    for segment in segments
+                    if self._keep_segment(segment)
+                ]
 
             transcript = " ".join(text_parts).strip()
 
-            print(
-                f"[STT] Transcript: {transcript}"
-            )
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            print(f"[STT] Transcript ({elapsed_ms:.0f} ms): {transcript}")
 
             return transcript
 
         except Exception as exc:
-            print(
-                f"[STT] Transcription error: {exc}"
-            )
+            print(f"[STT] Transcription error: {type(exc).__name__}: {exc}")
             return ""
