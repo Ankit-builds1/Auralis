@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from av import AudioFrame
 
 from app.audio.vad.detector import VoiceActivityDetector
@@ -23,4 +23,4 @@ def test_vad_detects_audio_frame():
     result = detector.process(frame)
 
     assert isinstance(result, bool)
-    assert detector.speech_frames + detector.silence_frames == 1
+    assert detector.speech_chunks + detector.silence_chunks == 1

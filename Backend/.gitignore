@@ -3,3 +3,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+# Generated ML model artifacts
+*.joblib
+
+# Backup/archive files
+*.zip
