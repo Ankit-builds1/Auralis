@@ -1,0 +1,312 @@
+/*
+ * Auralis UI polish (Week 2)
+ * Loaded AFTER App.css, so these rules override it.
+ * Selectors start with ".auralis-app .auralis-container" so they win
+ * over App.css without needing !important.
+ *
+ * 1. Brighter, more readable text
+ * 2. Bigger, bolder numbers in metric cards
+ * 3. Roomier System Events log
+ * 4. New Conversation panel (user + AI bubbles, TTFT badges)
+ */
+
+.auralis-app {
+  /* Mapped onto the Midnight Aurora theme in App.css */
+  --ui-text: var(--text);
+  --ui-text-soft: var(--text-dim);
+  --ui-text-muted: #9aa2d4;          /* brighter than --text-muted */
+  --ui-border: var(--border);
+  --ui-surface: rgba(255, 255, 255, 0.03);
+  --ui-surface-strong: rgba(255, 255, 255, 0.07);
+  --ui-accent: var(--cyan);
+  --ui-accent-2: var(--violet);
+  --ui-good: var(--good);
+  --ui-warn: var(--warn);
+  --ui-bad: var(--bad);
+}
+
+/* ---------- 1. Readability ---------- */
+
+.auralis-app .auralis-container {
+  color: var(--ui-text);
+}
+
+.auralis-app .auralis-container .card-title h2 {
+  color: var(--ui-text);
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+}
+
+.auralis-app .auralis-container .card-title span {
+  color: var(--ui-text-muted);
+  font-size: 0.72rem;
+}
+
+.auralis-app .auralis-container .metric-label {
+  color: var(--ui-text-soft);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+}
+
+.auralis-app .auralis-container .transcript-placeholder {
+  color: var(--ui-text-muted);
+  font-size: 0.9rem;
+}
+
+.auralis-app .auralis-container .auralis-header p {
+  color: var(--ui-text-soft);
+}
+
+/* ---------- 2. Numbers stand out ---------- */
+
+.auralis-app .auralis-container .metric-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--ui-accent);
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+/* Status / ICE text values are words, keep them a bit smaller */
+.auralis-app .auralis-container .connection-grid:not(.latency-grid) .metric:nth-child(-n + 2) .metric-value {
+  font-size: 1rem;
+}
+
+.auralis-app .auralis-container .metric-value.latency-good { color: var(--ui-good); }
+.auralis-app .auralis-container .metric-value.latency-warn { color: var(--ui-warn); }
+.auralis-app .auralis-container .metric-value.latency-bad  { color: var(--ui-bad); }
+
+.auralis-app .auralis-container .metric-sub {
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: var(--ui-text-muted);
+  letter-spacing: 0.04em;
+}
+
+/* TTFT is the mid-project Latency Check number: make it the hero */
+.auralis-app .auralis-container .metric.metric-highlight {
+  border-color: rgba(143, 123, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(143, 123, 255, 0.25), 0 8px 24px rgba(143, 123, 255, 0.12);
+}
+
+.auralis-app .auralis-container .metric.metric-highlight .metric-value {
+  font-size: 1.6rem;
+}
+
+.auralis-app .auralis-container .latency-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.auralis-app .auralis-container .audit-summary .metric-value {
+  font-size: 1.6rem;
+}
+
+.auralis-app .auralis-container .audit-table {
+  font-size: 0.85rem;
+  color: var(--ui-text);
+}
+
+.auralis-app .auralis-container .audit-table th {
+  color: var(--ui-text-soft);
+}
+
+.auralis-app .auralis-container .audit-table td {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+/* ---------- 3. System Events ---------- */
+
+.auralis-app .auralis-container .events {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auralis-app .auralis-container .event {
+  display: flex;
+  border-bottom: none;
+  gap: 14px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--ui-surface);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.auralis-app .auralis-container .event-time {
+  color: var(--ui-text-muted);
+  flex-shrink: 0;
+  min-width: 82px;
+}
+
+.auralis-app .auralis-container .event-message {
+  color: var(--ui-text);
+  word-break: break-word;
+}
+
+/* ---------- 4. Conversation panel ---------- */
+
+.auralis-app .auralis-container .conversation-box {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.auralis-app .auralis-container .turn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auralis-app .auralis-container .bubble {
+  max-width: 78%;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--ui-border);
+}
+
+.auralis-app .auralis-container .bubble-user {
+  align-self: flex-end;
+  background: rgba(90, 215, 255, 0.10);
+  border-color: rgba(90, 215, 255, 0.30);
+  border-bottom-right-radius: 4px;
+}
+
+.auralis-app .auralis-container .bubble-ai {
+  align-self: flex-start;
+  background: rgba(143, 123, 255, 0.12);
+  border-color: rgba(143, 123, 255, 0.32);
+  border-bottom-left-radius: 4px;
+}
+
+.auralis-app .auralis-container .bubble-ai.ai-error {
+  background: rgba(251, 113, 133, 0.10);
+  border-color: rgba(251, 113, 133, 0.40);
+}
+
+.auralis-app .auralis-container .bubble-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.auralis-app .auralis-container .bubble-who {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ui-text-soft);
+}
+
+.auralis-app .auralis-container .bubble-time {
+  font-size: 0.7rem;
+  color: var(--ui-text-muted);
+}
+
+.auralis-app .auralis-container .bubble-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ui-surface-strong);
+  color: var(--ui-text-soft);
+}
+
+.auralis-app .auralis-container .bubble-badge.latency-good { color: var(--ui-good); }
+.auralis-app .auralis-container .bubble-badge.latency-warn { color: var(--ui-warn); }
+.auralis-app .auralis-container .bubble-badge.latency-bad  { color: var(--ui-bad); }
+
+.auralis-app .auralis-container .bubble-text {
+  font-size: 0.98rem;
+  line-height: 1.55;
+  color: var(--ui-text);
+  white-space: pre-wrap;
+}
+
+.auralis-app .auralis-container .cursor {
+  margin-left: 2px;
+  color: var(--ui-accent-2);
+  animation: auralis-blink 1s steps(1) infinite;
+}
+
+.auralis-app .auralis-container .typing {
+  display: inline-flex;
+  gap: 5px;
+  padding: 4px 0;
+}
+
+.auralis-app .auralis-container .typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ui-accent-2);
+  opacity: 0.4;
+  animation: auralis-dot 1.2s infinite ease-in-out;
+}
+
+.auralis-app .auralis-container .typing span:nth-child(2) { animation-delay: 0.15s; }
+.auralis-app .auralis-container .typing span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes auralis-blink {
+  50% { opacity: 0; }
+}
+
+@keyframes auralis-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auralis-app .auralis-container .cursor,
+  .auralis-app .auralis-container .typing span {
+    animation: none;
+  }
+}
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 640px) {
+  .auralis-app .auralis-container .bubble {
+    max-width: 92%;
+  }
+
+  .auralis-app .auralis-container .event {
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
+/* Scrollbar for the new Conversation panel (matches App.css) */
+.auralis-app .auralis-container .conversation-box::-webkit-scrollbar {
+  width: 6px;
+}
+
+.auralis-app .auralis-container .conversation-box::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 6px;
+}
+
+.auralis-app .auralis-container .conversation-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* "CLEAR" link was nearly invisible */
+.auralis-app .auralis-container .btn-link {
+  color: var(--ui-text-muted);
+}
+
+.auralis-app .auralis-container .btn-link:hover {
+  color: var(--cyan);
+}

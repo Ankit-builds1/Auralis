@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import './App.css';
+import './ui-polish.css';
 
 const BACKEND_URL = `${import.meta.env.VITE_BACKEND_URL}/webrtc/offer`;
 
@@ -25,7 +26,7 @@ const FRAME_UI_EVERY = 10;
 
 // Fix #3: a finished segment that gets no transcript within this time is
 // treated as empty, so it cannot steal the next sentence's transcript.
-const TRANSCRIPT_TIMEOUT_MS = 5000;
+const TRANSCRIPT_TIMEOUT_MS = 15000;
 
 // Fix #4: ICE servers come from .env instead of being hardcoded.
 // If the TURN variables are missing, only STUN is used.
@@ -88,10 +89,15 @@ function App() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [iceState, setIceState] = useState('new');
   const [vadState, setVadState] = useState('idle');
-  const [transcripts, setTranscripts] = useState([]);
+  // Week 2: one "turn" = what the user said + Auralis's streamed reply
+  // { id, time, userText, sttMs, aiText, aiState: 'waiting'|'streaming'|'done'|'error',
+  //   ttftMs, totalMs, error }
+  const [turns, setTurns] = useState([]);
   const [events, setEvents] = useState([]);
   const [frameCount, setFrameCount] = useState(0);
   const [latencies, setLatencies] = useState([]);
+  const [ttfts, setTtfts] = useState([]);
+  const [totals, setTotals] = useState([]);
   const [segments, setSegments] = useState([]);
 
   // Week 3 Day 1: AI audio (backend -> browser) status
@@ -103,6 +109,10 @@ function App() {
   const audioRef = useRef(null);
   const dataChannelRef = useRef(null);
   const transcriptEndRef = useRef(null);
+
+  // Week 2: id of the turn that the next llm_* messages belong to.
+  // The backend handles turns one at a time, in order.
+  const currentTurnIdRef = useRef(null);
 
   // Day 4: arrival time of the most recent frame that contained speech
   const lastSpeechAtRef = useRef(null);
@@ -136,7 +146,7 @@ function App() {
   // Auto-scroll transcript to the newest line
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcripts]);
+  }, [turns]);
 
   // Clean up the mic meter and stats timer if the component unmounts
   useEffect(() => {
@@ -153,6 +163,10 @@ function App() {
 
   const lastLatency = latencies.length > 0 ? latencies[latencies.length - 1] : null;
   const avgLatency = average(latencies);
+
+  const lastTtft = ttfts.length > 0 ? ttfts[ttfts.length - 1] : null;
+  const avgTtft = average(ttfts);
+  const lastTotal = totals.length > 0 ? totals[totals.length - 1] : null;
 
   const transcribedCount = segments.filter((s) => s.transcribed).length;
   const avgSilenceWait = average(segments.map((s) => s.silenceWaitMs));
@@ -173,13 +187,37 @@ function App() {
   // TRANSCRIPT HISTORY
   // ---------------------------------------------------------
 
-  const addTranscript = (text, latencyMs) => {
+  const addTurn = (userText, sttMs) => {
+    const id = `${Date.now()}-${Math.random()}`;
     const time = new Date().toLocaleTimeString();
-    setTranscripts((previous) =>
+
+    currentTurnIdRef.current = id;
+
+    setTurns((previous) =>
       [
         ...previous,
-        { id: `${Date.now()}-${Math.random()}`, time, text, latencyMs },
-      ].slice(-50)
+        {
+          id,
+          time,
+          userText,
+          sttMs,
+          aiText: '',
+          aiState: 'waiting',
+          ttftMs: null,
+          totalMs: null,
+          error: null,
+        },
+      ].slice(-30)
+    );
+  };
+
+  // Update the turn the LLM is currently answering
+  const updateCurrentTurn = (update) => {
+    const id = currentTurnIdRef.current;
+    if (!id) return;
+
+    setTurns((previous) =>
+      previous.map((t) => (t.id === id ? { ...t, ...update(t) } : t))
     );
   };
 
@@ -479,15 +517,19 @@ function App() {
 
         const text = data.text.trim();
 
-        // End of speech -> transcript arrival
-        const latencyMs =
-          lastSpeechAtRef.current !== null
-            ? Math.round(performance.now() - lastSpeechAtRef.current)
-            : null;
+        // End of speech -> transcript ready.
+        // Prefer the backend's measurement (stt_ms, timed from the moment
+        // the VAD detected end of speech). Fall back to the browser clock.
+        let latencyMs = null;
+        if (typeof data.stt_ms === 'number') {
+          latencyMs = Math.round(data.stt_ms);
+        } else if (lastSpeechAtRef.current !== null) {
+          latencyMs = Math.round(performance.now() - lastSpeechAtRef.current);
+        }
 
         lastSpeechAtRef.current = null;
 
-        addTranscript(text, latencyMs);
+        addTurn(text, latencyMs);
         markSegmentTranscribed(text);
 
         if (latencyMs !== null) {
@@ -500,6 +542,61 @@ function App() {
         setStatus('transcript received');
         return;
       }
+
+      // -------- Week 2: LLM reply (Llama 3, streamed) --------
+
+      case 'llm_start':
+        setStatus('AI is replying...');
+        updateCurrentTurn(() => ({ aiState: 'streaming' }));
+        return;
+
+      // Many per reply: update the bubble, never log these
+      case 'llm_token': {
+        const token = typeof data.text === 'string' ? data.text : '';
+
+        if (data.first && typeof data.ttft_ms === 'number') {
+          const ttft = Math.round(data.ttft_ms);
+          setTtfts((previous) => [...previous, ttft].slice(-20));
+          updateCurrentTurn((t) => ({
+            aiState: 'streaming',
+            ttftMs: ttft,
+            aiText: t.aiText + token,
+          }));
+        } else {
+          updateCurrentTurn((t) => ({ aiState: 'streaming', aiText: t.aiText + token }));
+        }
+        return;
+      }
+
+      case 'llm_done': {
+        const total = typeof data.total_ms === 'number' ? Math.round(data.total_ms) : null;
+        const ttft = typeof data.ttft_ms === 'number' ? Math.round(data.ttft_ms) : null;
+
+        if (total !== null) {
+          setTotals((previous) => [...previous, total].slice(-20));
+        }
+
+        updateCurrentTurn((t) => ({
+          aiState: 'done',
+          // Use the final text from the backend if it sent one
+          aiText: typeof data.text === 'string' && data.text.trim() ? data.text.trim() : t.aiText,
+          ttftMs: t.ttftMs ?? ttft,
+          totalMs: total,
+        }));
+
+        addEvent(
+          `AI reply done (TTFT ${formatMs(ttft)}, total ${formatMs(total)}, ${data.tokens ?? '?'} tokens)`
+        );
+        setStatus('reply received');
+        return;
+      }
+
+      case 'llm_error':
+        console.error('[Backend] LLM error:', data);
+        updateCurrentTurn(() => ({ aiState: 'error', error: data.error || 'LLM error' }));
+        addEvent(`LLM error: ${data.error}`);
+        setStatus('LLM error');
+        return;
 
       case 'audio_error':
         console.error('[Backend] Audio error:', data);
@@ -823,6 +920,7 @@ function App() {
     dataChannelRef.current = null;
     lastSpeechAtRef.current = null;
     connectStartedAtRef.current = null;
+    currentTurnIdRef.current = null;
     resetSegmentTracking();
 
     setError(null);
@@ -839,9 +937,12 @@ function App() {
   };
 
   const clearHistory = () => {
-    setTranscripts([]);
+    setTurns([]);
     setLatencies([]);
+    setTtfts([]);
+    setTotals([]);
     setSegments([]);
+    currentTurnIdRef.current = null;
   };
 
   // ---------------------------------------------------------
@@ -902,7 +1003,7 @@ function App() {
               <div className="metric">
                 <div className="metric-label">Utterances</div>
                 {/* Fix #1: count transcripts, not latency values */}
-                <div className="metric-value">{transcripts.length}</div>
+                <div className="metric-value">{turns.length}</div>
               </div>
               <div className="metric">
                 <div className="metric-label">AI audio</div>
@@ -961,42 +1062,87 @@ function App() {
                 <div className={`metric-value ${getLatencyClass(lastLatency)}`}>
                   {formatMs(lastLatency)}
                 </div>
+                <div className="metric-sub">avg {formatMs(avgLatency)}</div>
+              </div>
+              <div className="metric metric-highlight">
+                <div className="metric-label">TTFT (last)</div>
+                <div className={`metric-value ${getLatencyClass(lastTtft)}`}>
+                  {formatMs(lastTtft)}
+                </div>
+                <div className="metric-sub">speech end → first AI word</div>
               </div>
               <div className="metric">
-                <div className="metric-label">Average</div>
-                <div className={`metric-value ${getLatencyClass(avgLatency)}`}>
-                  {formatMs(avgLatency)}
+                <div className="metric-label">Avg TTFT</div>
+                <div className={`metric-value ${getLatencyClass(avgTtft)}`}>
+                  {formatMs(avgTtft)}
                 </div>
+                <div className="metric-sub">{ttfts.length} {ttfts.length === 1 ? 'reply' : 'replies'}</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Full reply (last)</div>
+                <div className="metric-value">{formatMs(lastTotal)}</div>
+                <div className="metric-sub">speech end → last AI word</div>
               </div>
             </div>
           </section>
 
-          {/* LIVE TRANSCRIPT */}
+          {/* CONVERSATION (Week 2: transcript + streamed LLM reply) */}
 
           <section className="card full">
             <div className="card-title">
-              <h2>Live Transcript</h2>
+              <h2>Conversation</h2>
               <span>
-                STT OUTPUT
-                {transcripts.length > 0 && (
+                WHISPER → LLAMA 3
+                {turns.length > 0 && (
                   <button className="btn-link" onClick={clearHistory}>&nbsp;· CLEAR</button>
                 )}
               </span>
             </div>
 
-            <div className="transcript-box">
-              {transcripts.length === 0 ? (
-                <span className="transcript-placeholder">Waiting for speech input...</span>
+            <div className="conversation-box">
+              {turns.length === 0 ? (
+                <span className="transcript-placeholder">
+                  Connect and say something. Your words and Auralis's reply appear here.
+                </span>
               ) : (
-                transcripts.map((line) => (
-                  <div className="transcript-line" key={line.id}>
-                    <span className="transcript-time">{line.time}</span>
-                    <span>{line.text}</span>
-                    {line.latencyMs !== null && line.latencyMs !== undefined && (
-                      <span className={`transcript-latency ${getLatencyClass(line.latencyMs)}`}>
-                        {line.latencyMs} ms
-                      </span>
-                    )}
+                turns.map((turn) => (
+                  <div className="turn" key={turn.id}>
+                    <div className="bubble bubble-user">
+                      <div className="bubble-meta">
+                        <span className="bubble-who">You</span>
+                        <span className="bubble-time">{turn.time}</span>
+                        {turn.sttMs !== null && turn.sttMs !== undefined && (
+                          <span className={`bubble-badge ${getLatencyClass(turn.sttMs)}`}>
+                            STT {turn.sttMs} ms
+                          </span>
+                        )}
+                      </div>
+                      <div className="bubble-text">{turn.userText}</div>
+                    </div>
+
+                    <div className={`bubble bubble-ai ai-${turn.aiState}`}>
+                      <div className="bubble-meta">
+                        <span className="bubble-who">Auralis</span>
+                        {turn.ttftMs !== null && (
+                          <span className={`bubble-badge ${getLatencyClass(turn.ttftMs)}`}>
+                            TTFT {turn.ttftMs} ms
+                          </span>
+                        )}
+                        {turn.totalMs !== null && (
+                          <span className="bubble-badge">total {turn.totalMs} ms</span>
+                        )}
+                      </div>
+                      <div className="bubble-text">
+                        {turn.aiState === 'error' && `⚠ ${turn.error}`}
+                        {turn.aiState === 'waiting' && (
+                          <span className="typing">
+                            <span></span><span></span><span></span>
+                          </span>
+                        )}
+                        {(turn.aiState === 'streaming' || turn.aiState === 'done') && turn.aiText}
+                        {turn.aiState === 'streaming' && <span className="cursor">▍</span>}
+                      </div>
+                    </div>
                   </div>
                 ))
               )}
