@@ -1,208 +1,286 @@
-# Auralis — ML
+# Auralis — Backend
 
-Real-time Voice-to-Voice Emotion Engine: **machine learning module**.
+Real-time Voice-to-Voice Emotion Engine: **backend service**.
 
-Speech emotion recognition from raw audio, plus the Llama prompt and streaming client that turn a transcript and a detected emotion into an empathetic reply.
+A Python `aiohttp` + `aiortc` server that receives microphone audio over WebRTC, detects end of speech with Silero VAD, transcribes with Faster-Whisper, and streams a reply from a local Llama model, sending every step to the browser live over a WebRTC DataChannel.
 
 Part of Infotact Solutions' Advanced Generative AI Engineering internship (Project 2).
 
 | Role | Owner | Branch |
 |---|---|---|
-| **ML: emotion recognition + LLM prompts (this module)** | Siddhant | `ML` |
-| Backend: WebRTC, VAD, STT, LLM streaming | Priya Nirmal | `Backend` |
+| **Backend: WebRTC, VAD, STT, LLM streaming (this module)** | Priya Nirmal | `Backend` |
 | Frontend: WebRTC client + live dashboard | Ankit Dash | `frontend` |
+| ML: emotion recognition + LLM prompts | Siddhant | `ML` |
 
 ---
 
-## What this module does
+## Why Auralis
+
+Most voice assistants chain Speech-to-Text → LLM → Text-to-Speech as separate request/response calls. That adds 3–5 s of delay and throws away the speaker's tone.
+
+Auralis instead:
+- Streams audio **continuously** over WebRTC (UDP)
+- Detects the exact moment the user stops speaking
+- Transcribes and replies as **background tasks**, so audio never stops flowing
+- Streams the LLM reply **token by token** and measures **TTFT** live
+- *(Week 3)* Adds vocal emotion and replies with an emotion-matched voice
+
+**Use case:** a Crisis Negotiation Training Simulator, where a trainee speaks under pressure and the AI de-escalates.
+
+---
+
+## Architecture
 
 ```
-Speech segment (audio)            Transcript (from Whisper)
-        │                                  │
-        ▼                                  │
- Temporal feature extraction               │
- (40 MFCC + Δ + ΔΔ, 10 time regions,       │
-  mean + std → 2,400 features)             │
-        │                                  │
-        ▼                                  │
- StandardScaler → SVM (RBF)                │
-        │                                  │
-        ▼                                  ▼
- emotion label ──────────────►  Emotion-aware Llama prompt
- (angry / disgust / fear /                 │
-  happy / neutral / sad)                   ▼
-                                Streamed, empathetic 1–2 sentence reply
+Browser mic ──WebRTC (Opus/UDP)──► POST /webrtc/offer → aiortc RTCPeerConnection
+                                            │
+                              IncomingAudioTrack (20 ms frames)
+                                            │
+                       AudioProcessor  (fast, runs on every frame)
+                         ├─ Silero VAD   48→16 kHz, 512-sample chunks
+                         └─ Segmenter    pre-roll · hangover · min-voice filter
+                                            │ segment finished
+                                            ▼
+                         Background "turn" task (never blocks the frame loop)
+                         ├─ Faster-Whisper base.en  → transcript   (stt_ms)
+                         └─ Llama 3.2 3B via Ollama → streamed reply (ttft_ms)
+                                            │
+                     JSON events over the DataChannel → frontend dashboard
+                                            │
+                     TTSAudioTrack (outgoing audio, Week 3: test tone today)
 ```
 
+Signalling is one HTTP exchange (offer → answer). After that, audio and events flow over the peer connection.
+
 ---
 
-## Dataset: CREMA-D
+## Features
 
-| Item | Value |
+| Feature | Details |
 |---|---|
-| Clips | **7,442** |
-| Actors | **91** |
-| Emotions | angry, disgust, fear, happy, sad (1,271 each), neutral (1,087) |
-| Audio | resampled to 16 kHz mono |
+| WebRTC signalling | `aiortc`, SDP offer/answer via `POST /webrtc/offer` |
+| Health check | `GET /health` → `{"status": "ok"}` |
+| Voice Activity Detection | Silero VAD (ONNX), stateful 48→16 kHz resampler, threshold **0.5**, start after **3** speech chunks (~96 ms), end after **22** silence chunks (~700 ms) |
+| Segmentation | **300 ms** pre-roll, **100 ms** hangover, **≥200 ms of real voice** required (coughs/taps never reach Whisper), forced split at **15 s** |
+| Speech-to-Text | `faster-whisper` **base.en** (CPU, int8), `beam_size=5`, `initial_prompt` with project names, `condition_on_previous_text=False`, hallucination filter |
+| LLM | **Llama 3.2 3B** via Ollama, async streaming, "Auralis" persona, remembers the last 3 exchanges |
+| Non-blocking turns | Whisper + LLM run as background tasks; the frame loop keeps receiving audio |
+| Model warm-up | Whisper and Llama are loaded at server start, before the first user connects |
+| Latency metrics | `stt_ms`, `ttft_ms`, `total_ms`, all measured from end of speech |
+| Outgoing audio | Chunked outgoing track (test tone today), groundwork for streamed TTS |
+| No echo | Incoming mic audio is never sent back to the browser |
+| CORS | Allowed origins: `localhost:5173` / `5174` |
 
-**Actor-independent splits** (`GroupShuffleSplit` by `actor_id`, `random_state=42`), so the model is always tested on **voices it has never heard**:
+> The LLM client (`app/llm/ollama_client.py`) is based on Siddhant's `ml/src/llm/ollama_client.py` and `emotion_prompt.py` (same persona and rules), made async so it doesn't block WebRTC.
 
-| Split | Clips | Actors |
+---
+
+## DataChannel Protocol
+
+| `type` | Fields | When |
 |---|---|---|
-| Train | 5,152 | 63 |
-| Validation | 1,142 | 14 |
-| Test | 1,148 | 14 |
+| `status` | `status: "connected"` | Once, when the channel opens |
+| `audio_frame` | `frame, sample_rate, samples, pts, is_speech, segment_started, segment_finished, segment_frame_count, latency_ms` | ~50/s |
+| `vad` | `vad_state: "speaking" \| "processing" \| "idle"` | On state change |
+| `transcript` | `text, stt_ms` | Whisper finished |
+| `llm_start` | — | LLM starts replying |
+| `llm_token` | `text, first, ttft_ms` *(first token only)* | Each streamed token |
+| `llm_done` | `text, ttft_ms, total_ms, tokens` | Reply complete |
+| `llm_error` | `error` | Ollama unreachable / failed |
+| `audio_error` | `frame, error` | Frame processing failed |
 
----
+**One turn:** `vad: speaking` → `vad: processing` → `transcript` → `llm_start` → `llm_token` × N → `llm_done` → `vad: idle`
 
-## Experiments
-
-| Experiment | Features | Model | Val acc | Test acc | Test macro-F1 |
-|---|---|---|---|---|---|
-| Baseline | MFCC mean (40) | Random Forest | 0.470 | 0.414 | — |
-| Advanced features | MFCC + Δ + ΔΔ + spectral + energy (246) | Random Forest | — | — | — |
-| Combined temporal + prosodic | temporal + RMS, ZCR, spectral centroid/bandwidth/rolloff/contrast | SVM RBF (C=10, balanced) | **0.528** | **0.503** | **0.498** |
-| Model comparison | combined | SVM RBF / SVM linear | 0.490 / 0.468 | 0.477 / 0.476 | 0.473 / 0.474 |
-| **Temporal (deployed)** | **MFCC + Δ + ΔΔ, 10 regions (2,400)** | **SVM RBF** | **0.513** | **0.490** | **0.482** |
-
-Chance level for 6 classes is **16.7 %**.
-
-**Tuning:** SVM `C` ∈ {1, 5, 10, 20, 50} (best ≥ 10); class weights `balanced` vs custom (no meaningful gain from custom weights).
-
-### Per-emotion results (deployed model, test set)
-
-| Emotion | Precision | Recall | F1 |
-|---|---|---|---|
-| angry | 0.54 | **0.77** | **0.63** |
-| neutral | 0.57 | 0.55 | 0.56 |
-| sad | 0.51 | 0.47 | 0.49 |
-| happy | 0.42 | 0.50 | 0.46 |
-| fear | 0.43 | 0.37 | 0.40 |
-| disgust | 0.44 | 0.29 | 0.35 |
-
-Anger is detected best; disgust and fear are most often confused with other emotions.
-
----
-
-## Robustness
-
-Tested on the combined model (clean test accuracy 0.503):
-
-| Condition | Accuracy |
+| Metric | Meaning |
 |---|---|
-| Clean | 0.503 |
-| Volume × 0.5 / × 1.5 | 0.500 / 0.487 |
-| Clip shortened to 75 % | 0.422 |
-| Clip stretched to 125 % | 0.377 |
-| 0.25 s silence added | 0.346 |
-| Loudness normalised | 0.394 |
-| **Gaussian noise (0.02)** | **0.195** |
-
-Noise was the biggest weakness, so the model was retrained on clean + noisy copies (10,304 samples):
-
-| Model | Clean test | Noisy test |
-|---|---|---|
-| Baseline | 0.503 | **0.195** |
-| Noise-augmented | 0.469 | **0.443** |
-
-Noise augmentation more than doubles accuracy on noisy audio, at a small cost on clean audio.
+| `stt_ms` | End of speech → transcript ready |
+| `ttft_ms` | End of speech → first LLM word *(mid-project Latency Check)* |
+| `total_ms` | End of speech → last LLM word |
 
 ---
 
-## LLM: persona and streaming
+## Week 2 Results (Mid-Project Review)
 
-- `src/llm/ollama_client.py`: streams tokens from Llama via Ollama (`"stream": true`, `num_predict: 80`)
-- `src/llm/emotion_prompt.py`: "Auralis" persona: concise, empathetic, 1–2 short sentences, no bullet points, never mentions the emotion model. The detected emotion is passed as **possibly imperfect** context.
-- `src/pipeline.py`: audio file + transcript → emotion → streamed reply
+### Transcription Audit: problems found and fixed
 
-The backend uses an async version of this client (same persona and rules) for the live system.
+| Problem | Root cause | Fix |
+|---|---|---|
+| Sentences split at short pauses | VAD ended speech after ~0.4 s silence, threshold 0.2 | Threshold **0.5**, end after **~700 ms** silence |
+| Names misheard ("Ankida", "BTEK") | Whisper `base`, greedy decoding, no context | **`base.en`**, `beam_size=5`, `initial_prompt` |
+| Phantom "Thank you." from noise | Coughs/taps sent to Whisper; min-length counted silence frames | Min-length now counts **real voice** only; hallucination filter |
+| Silence counted twice (~1.2 s wait) | 500 ms hangover on top of the VAD window | Hangover reduced to **100 ms** |
+| UI stuck on "PROCESSING" | No `idle` sent after transcription | `idle` sent when each turn finishes |
+| Slow first sentence | Whisper loaded on first use | Warm-up at startup |
+| WebRTC froze during Whisper | STT on the event loop | Background turn tasks |
+
+Live audit result: **5 / 5 segments transcribed correctly**, including names.
+
+### Latency Check (laptop CPU, no GPU)
+
+| Stage | Measured |
+|---|---|
+| Speech → Text (`base.en`, `beam_size=5`) | ~1.2 s |
+| TTFT with Llama 3 **8B** | 2.6 – 8.9 s (`ollama ps` showed **100 % CPU**) |
+| TTFT with Llama 3.2 **3B** | re-measuring |
+
+~0.7 s of every turn is the deliberate silence window (keeps sentences whole). The rest is Whisper and the LLM on CPU. The 800 ms target needs GPU inference; the streaming architecture is already built for it.
 
 ---
 
 ## Getting Started
 
+**Prerequisites:** Python 3.12+, [Ollama](https://ollama.com)
+
+```bash
+ollama pull llama3.2:3b
+```
+
 ```bash
 git clone https://github.com/Ankit-builds1/Auralis.git
 cd Auralis
-git checkout ML
-cd ml
+git checkout Backend
+cd Backend
 
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 # source .venv/bin/activate     # macOS/Linux
 
 pip install -r requirements.txt
+copy .env.example .env          # macOS/Linux: cp .env.example .env
 ```
 
-**Trained models are not in git** (too large; `models/*.joblib` is gitignored). Place these in `ml/models/`:
+`.env`:
 
-| File | Size |
+```env
+HOST=0.0.0.0
+PORT=8001
+ML_SERVICE_URL=http://localhost:9000
+```
+
+Run (Ollama must be running):
+
+```bash
+python -m app.main
+```
+
+Wait for:
+
+```
+[STT] Warm-up done in ... ms
+[LLM] Warm-up done (model=llama3.2:3b)
+[STARTUP] Ready
+```
+
+For a frontend on another network: `ngrok http 8001`, and share the URL as `VITE_BACKEND_URL`.
+
+Optional: change the model with `OLLAMA_MODEL=llama3` (and `OLLAMA_URL` if Ollama isn't on `localhost:11434`).
+
+---
+
+## Testing
+
+```bash
+pytest
+```
+
+Covers VAD, PCM conversion, latency tracking, speech segmentation, the audio processor and the WebRTC offer flow.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `[LLM] Warm-up failed` / `llm_error` | Ollama not running or model not pulled | `ollama pull llama3.2:3b`, then start Ollama |
+| Very slow replies (TTFT > 5 s) | Large model on CPU | Check `ollama ps`; use `llama3.2:3b` |
+| 403 / CORS error | Frontend not on `localhost:5173`/`5174` | Use an allowed port or add the origin in `app/main.py` |
+| `ERR_CONNECTION_REFUSED` | ngrok stopped or URL changed | Restart `ngrok http 8001`, share the new URL |
+| Sentences split | VAD settings changed | Check `detector.py`: threshold 0.5, 22 silence chunks |
+| Junk text from noise | Min-voice filter changed | Check `MIN_VOICED_FRAMES` in `processor.py` |
+
+---
+
+## Progress Log
+
+**Week 1: WebRTC Foundation ✅**
+- aiohttp + aiortc server, `/webrtc/offer`, `/health`
+- Bi-directional audio over WebRTC, DataChannel events
+- PCM extraction, audio processing foundation
+
+**Week 2: VAD + STT + LLM ✅**
+- Real-time Silero VAD with tuned end-of-speech detection
+- Speech segmentation (pre-roll, hangover, min-voice filter, 15 s cap)
+- Faster-Whisper `base.en` with accuracy fixes and hallucination filter
+- **LLM integration: Llama via Ollama, streamed token by token**
+- **TTFT measurement** (`stt_ms`, `ttft_ms`, `total_ms`)
+- Non-blocking background turns, model warm-up at startup
+- Mid-project review: transcription audit + latency check
+
+**Week 3: in progress 🔄**
+- Day 1: outgoing audio track with chunked streaming (test tone)
+- Next: connect Siddhant's emotion model, emotion-conditioned TTS, stream TTS audio
+
+---
+
+## Known Limitations
+
+- Outgoing audio is a **test tone**; real TTS comes in Week 3
+- Emotion model is copied into `app/ml_clients/` but **not yet connected** to the live pipeline
+- CPU-only latency is above the 800 ms target (GPU needed)
+- Free ngrok URLs change on every restart
+
+---
+
+## Roadmap
+
+- **Week 3:** emotion detection in the live turn (parallel with Whisper), emotion-aware prompt, emotion-conditioned TTS streamed in chunks
+- **Week 4:** interruption handling (stop AI audio when the user speaks), latency optimisation
+
+---
+
+## Tech Stack
+
+| Layer | Tech |
 |---|---|
-| `day7_temporal_svm_rbf.joblib` | ~94 MB |
-| `day7_temporal_scaler.joblib` | ~57 KB |
+| Web server | `aiohttp`, `aiohttp-cors` |
+| Real-time transport | `aiortc` (WebRTC) |
+| VAD | `silero-vad` (ONNX Runtime), `torch` |
+| Speech-to-Text | `faster-whisper` (CTranslate2) |
+| LLM | Ollama + Llama 3.2 3B |
+| Audio resampling | `PyAV` (`av`) |
+| Testing | `pytest`, `pytest-asyncio` |
+| Config | `python-dotenv` |
 
-**Dataset:** download [CREMA-D](https://github.com/CheyneyComputerScience/CREMA-D) `AudioWAV` into `ml/data/raw/CREMA-D/AudioWAV/`.
-
-Run (from the `ml/` folder):
-
-```bash
-# Predict emotion for one audio file
-python -m src.models.audio_emotion
-
-# Full pipeline: audio + transcript → emotion → Llama reply (needs Ollama running)
-ollama pull llama3.2:3b
-python -m src.pipeline
-```
-
-Retrain the deployed model:
-
-```bash
-python -m src.data.create_metadata
-python -m src.data.split_dataset
-python -m src.features.extract_temporal_features
-python -m src.models.train_day7_temporal
-```
+Pinned versions: [`requirements.txt`](./requirements.txt)
 
 ---
 
 ## Project Structure
 
 ```
-ml/
-├── data/
-│   ├── raw/CREMA-D/AudioWAV/       # dataset (download separately)
-│   ├── metadata/                   # labels.csv + actor-independent splits
-│   └── features/                   # generated features (gitignored)
-├── models/                         # trained .joblib files (gitignored)
-├── notebooks/                      # audio exploration
-├── results/                        # metrics, confusion matrices, error analysis
-├── src/
-│   ├── data/                       # metadata + splitting
-│   ├── features/                   # MFCC, spectral, prosodic, temporal features
-│   ├── augmentation/               # noise augmentation + evaluation
-│   ├── robustness/                 # robustness tests
-│   ├── models/                     # training, tuning, inference, error analysis
-│   ├── llm/                        # persona prompt + streaming Ollama client
-│   └── pipeline.py                 # audio + transcript → emotion → reply
-└── requirements.txt
+Backend/
+├── app/
+│   ├── main.py                     # aiohttp app, routes, CORS, model warm-up at startup
+│   ├── config/settings.py          # HOST, PORT, ML_SERVICE_URL from .env
+│   ├── webrtc/
+│   │   ├── server.py               # /webrtc/offer, track + DataChannel wiring
+│   │   ├── connection.py           # RTCPeerConnection wrapper
+│   │   ├── audio_track.py          # frame loop + background STT → LLM turns, DataChannel events
+│   │   └── tts_track.py            # outgoing audio track (Week 3)
+│   ├── audio/
+│   │   ├── processor.py            # VAD + segmentation (no STT here)
+│   │   ├── vad/detector.py         # Silero VAD
+│   │   ├── segments/speech_segment.py
+│   │   ├── pcm/converter.py
+│   │   └── metrics/latency.py
+│   ├── stt/
+│   │   ├── transcriber.py          # Faster-Whisper wrapper + hallucination filter
+│   │   └── engine.py               # one shared Whisper model for the server
+│   ├── llm/
+│   │   └── ollama_client.py        # async streaming Llama client + persona
+│   └── ml_clients/                 # Siddhant's emotion code (Week 3 integration)
+├── tests/
+├── requirements.txt
+├── .env.example
+└── pytest.ini
 ```
-
----
-
-## Progress
-
-**Week 1 ✅** CREMA-D exploration, metadata, actor-independent splits, MFCC baseline
-
-**Week 2 ✅** Advanced, prosodic and temporal features; SVM tuning; class weights; robustness tests; noise-augmented training; temporal SVM; error analysis; streaming Llama client + emotion-aware prompt
-
-**Week 3 🔄** Inference pipeline, confidence analysis, end-to-end ML pipeline; connecting the emotion model to the live backend; emotion-conditioned TTS
-
----
-
-## Known Limitations
-
-- ~49 % accuracy on 6 emotions; CREMA-D is **acted studio speech**, so real laptop-mic voices will be harder
-- Disgust and fear are the weakest classes
-- Very sensitive to noise and added silence unless the noise-augmented model is used
-- The deployed temporal model (0.490) is slightly below the combined temporal + prosodic model (0.503); worth re-checking which to deploy
-- Model files must be shared manually (not in git)
