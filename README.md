@@ -1,21 +1,22 @@
 # Auralis — Frontend
 
-**Real-time Voice-to-Voice (V2V) Emotion Engine — browser client.**
-React + native WebRTC dashboard that streams live microphone audio to the Auralis backend and visualises voice activity, transcripts, latency and segmentation quality in real time.
+**Real-time Voice-to-Voice (V2V) Emotion Engine: browser client.**
 
-Part of Infotact Solutions' *Advanced Generative AI Engineering* internship (Project 2 of 3).
+A React + native WebRTC dashboard that streams live microphone audio to the Auralis backend and shows, in real time, what the system hears, what it understood, how Auralis replies, and how long every step took.
+
+Part of Infotact Solutions' *Advanced Generative AI Engineering* internship (Project 2).
 
 | Role | Owner | Branch |
 |---|---|---|
-| **Frontend / streaming UI (this module)** | Ankit Dash | `frontend` |
-| Backend / WebRTC + VAD + STT | Priya Nirmal | `Backend` |
-| Audio ML / emotion recognition | Siddhant | `ML` |
+| **Frontend: WebRTC client + live dashboard (this module)** | Ankit Dash | `frontend` |
+| Backend: WebRTC, VAD, STT, LLM streaming | Priya Nirmal | `Backend` |
+| ML: emotion recognition + LLM prompts | Siddhant | `ML` |
 
 ---
 
 ## Why Auralis
 
-Most conversational AI chains **Speech-to-Text → LLM → Text-to-Speech** over slow request/response calls, which adds 3–5 s of delay and discards the speaker's emotional tone. Auralis streams audio continuously over WebRTC, detects when the user stops speaking, transcribes it, and (in later weeks) responds with an emotion-matched voice — targeting **sub-800 ms** responses.
+Most conversational AI chains **Speech-to-Text → LLM → Text-to-Speech** over slow request/response calls, adding 3–5 s of delay and discarding the speaker's tone. Auralis streams audio continuously over WebRTC, detects when the user stops speaking, transcribes it, and streams a reply from a local LLM token by token, aiming for **sub-800 ms** voice responses.
 
 **Use case:** a Crisis Negotiation Training Simulator, where a trainee speaks under pressure and the AI de-escalates in a tone matched to their emotional state.
 
@@ -26,18 +27,19 @@ Most conversational AI chains **Speech-to-Text → LLM → Text-to-Speech** over
 ```mermaid
 flowchart LR
     A[Microphone] -->|getUserMedia<br/>AGC + noise suppression + echo cancellation| B[React client]
-    B -->|SDP offer<br/>HTTP POST /webrtc/offer via ngrok| C[aiortc backend]
+    B -->|SDP offer<br/>POST /webrtc/offer via ngrok| C[aiortc backend]
     C -->|SDP answer| B
-    B ==>|Opus audio track<br/>WebRTC, STUN/TURN| C
-    C --> D[Silero VAD]
-    D --> E[Segmenter<br/>300 ms pre-roll<br/>500 ms silence hangover]
-    E --> F[faster-whisper base]
-    C -.->|DataChannel 'vad-state'<br/>JSON events| B
+    B ==>|Opus audio track<br/>WebRTC · STUN/TURN| C
+    C --> D[Silero VAD + segmenter]
+    D --> E[Faster-Whisper base.en]
+    E --> F[Llama 3.2 3B · Ollama]
+    C -.->|DataChannel 'vad-state'<br/>VAD · transcript · llm_token · TTFT| B
+    C ==>|Outgoing audio track<br/>Week 3: TTS| B
 ```
 
-- **Signalling** is a single HTTP exchange (offer → answer). After that, everything flows over the peer connection.
-- **Audio** travels as a WebRTC media track (UDP, low latency).
-- **Results** (VAD state, transcripts, per-frame telemetry) come back over a WebRTC **DataChannel**, so the UI never polls.
+- **Signalling:** one HTTP exchange (offer → answer). After that, everything flows over the peer connection.
+- **Audio:** sent as a WebRTC media track (UDP, low latency).
+- **Results:** VAD state, transcripts, streamed LLM tokens and timings come back over a WebRTC **DataChannel**, so the UI never polls.
 
 ---
 
@@ -45,16 +47,19 @@ flowchart LR
 
 | Feature | What it does |
 |---|---|
-| **WebRTC connection** | Offer/answer signalling, STUN + TURN, ICE gathering with early exit and a 3 s cap |
-| **Mic capture** | Browser AGC, noise suppression and echo cancellation enabled for a clean, strong signal |
-| **Live mic level meter** | Web Audio `AnalyserNode` → RMS → dB, 60 fps, rendered directly to the DOM (no React re-renders) with quiet / good / loud zones |
-| **Voice activity display** | Live SPEAKING → PROCESSING → IDLE state from the backend's Silero VAD |
-| **Live transcript** | Scrolling, timestamped history with per-utterance latency |
-| **Latency check** | End-of-speech → transcript, per utterance and averaged, colour-coded against the 800 ms target |
-| **Transcription audit** | Per-segment speech duration, silence-wait threshold, gap between segments, and transcribed vs empty |
-| **Connection diagnostics** | ICE candidate counts (host / srflx / relay), reason gathering ended, total connect time |
-| **System event log** | Last 30 meaningful events; high-frequency telemetry is filtered out |
-| **Error handling** | Clear messages for denied mic, missing mic, missing config, 404, 403 (CORS), unreachable backend, failed media, blocked autoplay |
+| **WebRTC connection** | Offer/answer signalling, STUN + TURN (from `.env`), ICE gathering with early exit on a relay candidate and a 3 s cap |
+| **Mic capture** | Browser AGC, noise suppression and echo cancellation for a clean, strong signal |
+| **Live mic level meter** | Web Audio `AnalyserNode` → RMS → dB at 60 fps, written straight to the DOM (no React re-renders), quiet / good / loud zones |
+| **Voice activity display** | Live SPEAKING → PROCESSING → IDLE from the backend's Silero VAD |
+| **Conversation panel** | Your sentence and Auralis's reply as chat bubbles; the reply **types in live, token by token**, with "thinking" dots while waiting |
+| **Per-turn badges** | STT time on your bubble; **TTFT** and total reply time on Auralis's bubble |
+| **Latency dashboard** | Speech → Text (last + average), **TTFT (last)**, **average TTFT**, full reply time, colour-coded against the 800 ms target |
+| **Transcription audit** | Per-segment speech duration, silence wait, gap before, transcribed vs empty |
+| **AI audio status** | Detects the backend's outgoing audio track, live packet counter from WebRTC stats, recovery button if autoplay is blocked |
+| **Connection diagnostics** | ICE candidate counts (host / srflx / relay), why gathering ended, total connect time |
+| **System event log** | Last 30 meaningful events; high-frequency messages (frames, tokens) are never logged |
+| **Error handling** | Clear messages for denied/missing mic, missing config, 404, 403 (CORS), unreachable backend, failed media, blocked autoplay, LLM errors |
+| **Performance** | Frame counter throttled (50 msgs/s → 5 renders/s); segment ↔ transcript matching with a FIFO queue so fast back-to-back sentences never get mixed up |
 
 ---
 
@@ -64,41 +69,45 @@ The frontend opens a DataChannel labelled `vad-state`. The backend sends JSON me
 
 | `type` | Fields | Frequency | Frontend behaviour |
 |---|---|---|---|
-| `audio_frame` | `frame`, `sample_rate`, `samples`, `is_speech`, `segment_started`, `segment_finished`, `segment_frame_count`, `latency_ms` | ~50/s (one per 20 ms frame) | Updates counters and segment tracking silently; never logged |
-| `vad` | `vad_state`: `speaking` \| `processing` \| `idle` | Per utterance | Updates the VAD badge, logs the event |
-| `transcript` | `text` | Per utterance | Appends to the transcript, records latency, marks the audit segment |
-| `audio_error` | `frame`, `error` | On failure | Logs the backend error |
+| `status` | `status` | Once | Updates the status card |
+| `audio_frame` | `frame, sample_rate, samples, is_speech, segment_started, segment_finished, segment_frame_count, latency_ms` | ~50/s | Frame counter + segment tracking; never logged |
+| `vad` | `vad_state`: `speaking` \| `processing` \| `idle` | On change | Updates the VAD badge |
+| `transcript` | `text, stt_ms` | Per utterance | Adds a new conversation turn, records STT latency, marks the audit row |
+| `llm_start` | — | Per reply | Shows "thinking" dots in the AI bubble |
+| `llm_token` | `text, first, ttft_ms` *(first only)* | Per token | Appends to the AI bubble; records **TTFT** on the first token |
+| `llm_done` | `text, ttft_ms, total_ms, tokens` | Per reply | Finalises the bubble, records total reply time |
+| `llm_error` | `error` | On failure | Shows the error in the AI bubble |
+| `audio_error` | `frame, error` | On failure | Logs the backend error |
 
-Per-utterance sequence: `vad: speaking` → `vad: processing` → `transcript` → `vad: idle`.
+**One turn:** `vad: speaking` → `vad: processing` → `transcript` → `llm_start` → `llm_token` × N → `llm_done` → `vad: idle`
+
+All timings come from the backend and are measured **from the moment the VAD detects end of speech**, so network delay doesn't distort them.
 
 ---
 
-## Week 2 results — Transcription Audit & Latency Check
+## Week 2 results: Transcription Audit & Latency Check
 
-The audit panel was built to prove the mid-project review criteria: *"accurately transcribes continuous speech and detects silence thresholds"* and *"measure latency"*. Running it exposed real pipeline bugs, which were then fixed:
+The audit panel was built to prove the mid-project review criteria: *"accurately transcribes continuous speech and detects silence thresholds"* and *"measure latency (TTFT)"*. Each run exposed real pipeline issues that the team then fixed:
 
-| Metric | Run 1 (initial) | Run 2 (backend segmentation fix) | Run 3 (+ mic AGC, log cleanup) |
-|---|---|---|---|
-| Silence threshold | 20 ms (ended on first quiet frame) | 500 ms | **500 ms, consistent** |
-| Segments transcribed | 3 / 8, sentences split and clipped | 8 / 8, words garbled | **4 / 5, long sentence kept in one segment** |
-| Speech → text latency | Invalid (6–40 ms — measurement masked by a blocked event loop) | 2–15 s, growing | **~1.7 s, steady** |
+| Metric | Run 1 (initial) | Run 2 (segmentation fix) | Run 3 (+ mic AGC, log cleanup) | **Run 4 (final Week 2 pipeline)** |
+|---|---|---|---|---|
+| End-of-speech detection | Ended on the first quiet frame | 500 ms hangover | 500 ms | **~700 ms VAD window + 100 ms hangover** |
+| Segments transcribed | 3 / 8, sentences split | 8 / 8, words garbled | 4 / 5 | **5 / 5, names correct** |
+| Speech → text | Invalid (event loop blocked) | 2–15 s, growing | ~1.7 s, steady | **~1.2 s** |
+| TTFT (first LLM word) | — | — | Not possible (no LLM) | **2.6 – 8.9 s** (Llama 3 8B, CPU) |
 
-**Root causes found and fixed**
+**Issues found through the audit and fixed**
 
-1. *Backend:* segments ended on the first silent frame → added a 500 ms silence hangover and 300 ms pre-roll.
-2. *Backend:* Whisper ran on the asyncio event loop, freezing WebRTC during transcription → moved processing to a worker thread (`asyncio.to_thread`).
-3. *Frontend:* browser auto gain control had been disabled for debugging, so Silero's speech probability was only 0.20–0.39 → re-enabled AGC, noise suppression and echo cancellation (probability now 0.52–0.92).
-4. *Backend:* per-frame logging (100+ lines/s) caused a growing processing backlog → removed.
+1. Segments ended on the first silent frame → pre-roll + silence hangover added.
+2. Whisper ran on the asyncio event loop and froze WebRTC → moved to background tasks.
+3. Browser AGC had been disabled for debugging, so VAD speech probability was only 0.20–0.39 → re-enabled (now 0.52–0.92).
+4. Per-frame logging caused a growing backlog → removed.
+5. Sentences split at short pauses, names misheard ("Ankida", "BTEK") → VAD threshold 0.5 + 700 ms window; Whisper `base.en` with `beam_size=5` and an `initial_prompt`.
+6. Coughs produced phantom "Thank you." → minimum real-voice filter + hallucination filter.
+7. Silence was counted twice (~1.2 s wait) → hangover reduced to 100 ms.
+8. UI stuck on PROCESSING → backend now sends `idle` after each turn.
 
-**Latency breakdown** (frontend measurement matches backend `processing_ms`):
-
-| Stage | Time |
-|---|---|
-| Silence wait (end-of-speech detection) | 500 ms |
-| faster-whisper `base`, CPU, int8 | ~1,100–1,250 ms |
-| **Total, measured in the browser** | **~1,700 ms** |
-
-Whisper is ~70 % of the total. Paths toward the 800 ms target: a smaller model (`tiny.en`), GPU inference, or a shorter silence wait.
+**Where the time goes:** ~0.7 s is the deliberate silence window (keeps sentences whole). The rest is Whisper and the LLM on a laptop CPU; `ollama ps` showed Llama 3 8B at 100 % CPU, so the backend switched to Llama 3.2 3B. The sub-800 ms target needs GPU inference.
 
 ---
 
@@ -114,13 +123,18 @@ cd frontend
 npm install
 ```
 
-Create `frontend/.env` (next to `package.json`, **not** inside `src/`):
+Create `frontend/.env` (next to `package.json`, **not** inside `src/`). It's gitignored, so never commit it:
 
-```
+```env
 VITE_BACKEND_URL=https://<backend-ngrok-url>.ngrok-free.dev
+VITE_TURN_URL=turn:<turn-server>:80
+VITE_TURN_USERNAME=<username>
+VITE_TURN_CREDENTIAL=<password>
 ```
 
-On Windows PowerShell, create it with ASCII encoding (see Troubleshooting):
+If the TURN variables are missing, the app uses STUN only (fine on the same network).
+
+On Windows PowerShell, create it with plain encoding (see Troubleshooting):
 
 ```powershell
 Set-Content -Path .env -Value "VITE_BACKEND_URL=https://<backend-ngrok-url>.ngrok-free.dev" -Encoding ascii
@@ -129,10 +143,10 @@ Set-Content -Path .env -Value "VITE_BACKEND_URL=https://<backend-ngrok-url>.ngro
 Run:
 
 ```bash
-npm run dev   # must be http://localhost:5173 — the backend's CORS allows only this origin
+npm run dev     # http://localhost:5173 (5174 is also allowed by the backend's CORS)
 ```
 
-**Usage:** STOP → START MIC → CONNECT → wait for ICE State `connected` → speak, then pause for a moment.
+**Usage:** START MIC → CONNECT → wait for ICE State `connected` → speak, then pause.
 
 ---
 
@@ -140,96 +154,108 @@ npm run dev   # must be http://localhost:5173 — the backend's CORS allows only
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Request goes to `.../undefined/webrtc/offer` | `.env` not loaded | Put `.env` in `frontend/`, not `src/`, and restart `npm run dev` |
-| `.env` exists but URL is still `undefined` | PowerShell `>` writes UTF-16, which Vite can't read | Recreate with `Set-Content ... -Encoding ascii` |
-| `403` / CORS error | Dev server on 5174 instead of 5173 | Close other `npm run dev` terminals, restart on 5173 |
-| `ERR_CONNECTION_REFUSED` / "Could not reach the backend" | Backend or ngrok not running, or stale URL | Ask for the current ngrok URL; free URLs change on restart |
+| "Backend URL is not configured" | `.env` missing or not loaded | Create `frontend/.env`, then restart `npm run dev` (Vite reads `.env` only at startup) |
+| Request goes to `.../undefined/webrtc/offer` | `.env` in the wrong folder | Put it in `frontend/`, not `src/` |
+| `.env` exists but URL is still `undefined` | PowerShell `>` writes UTF-16 | Recreate with `Set-Content ... -Encoding ascii` |
+| `403` / CORS error | Dev server on a port other than 5173/5174 | Close old `npm run dev` terminals and restart |
+| "Could not reach the backend" | Backend or ngrok not running, or URL changed | Ask for the current ngrok URL; free URLs change on restart |
 | ngrok URL ends in `.ngrok-free.d` | Terminal window too narrow | The real URL ends in `.dev` |
-| Frames stay at 0 | DataChannel not delivering | Confirm the backend is running its latest commit |
+| "No TURN server in .env" in the log | TURN variables missing | Add them to `.env` if testing across networks |
+| AI bubble shows "⚠ Cannot reach Ollama" | Ollama not running on the backend machine | Start Ollama and `ollama pull llama3.2:3b` |
+| TTFT above 5 s | Large LLM on CPU | Backend should use `llama3.2:3b` |
 | Mic meter stays grey while speaking | Mic too quiet or wrong input device | Check the OS input device and level |
-| Garbled or split transcripts | Weak mic signal | Keep AGC enabled; speak at normal volume |
 
 ---
 
 ## Mid-project review demo checklist
 
 **Setup (before the call)**
-- [ ] Backend running on its latest commit, ngrok active, URL in `.env`
-- [ ] Frontend on `localhost:5173`, transcript and audit cleared
+- [ ] Ollama running with `llama3.2:3b`; backend shows `[STARTUP] Ready`
+- [ ] ngrok active, URL in `.env`
+- [ ] Frontend running, conversation and audit cleared
 
-**Live demo (~3 minutes)**
-1. **Connect** — START MIC → CONNECT. Point out the event log: ICE gathering reason, candidate types, connect time.
-2. **Mic meter** — speak and show the bar entering the green zone.
-3. **VAD** — say a sentence; show SPEAKING → PROCESSING → IDLE.
-4. **Transcription** — say *"The weather is nice today."* and show the transcript.
-5. **Continuous speech** — say one long sentence; show it stays **one row** in the audit table.
-6. **Silence threshold** — point to the **500 ms** Silence wait, identical on every row.
-7. **Non-speech** — cough once; show it flagged `✗ empty` instead of producing text.
-8. **Latency** — show the ~1.7 s average and explain the breakdown table above.
+**Live demo (~4 minutes)**
+1. **Connect:** START MIC → CONNECT. Show the event log: ICE gathering reason, candidate types, connect time.
+2. **Mic meter:** speak and show the bar entering the green zone.
+3. **VAD:** say a sentence; show SPEAKING → PROCESSING → IDLE.
+4. **Conversation:** say *"Hello, my name is Ankit Dash. How are you today?"* Show the transcript, then the reply typing in live.
+5. **TTFT:** point to the highlighted **TTFT** card and the TTFT badge on the reply.
+6. **Continuous speech:** say one long sentence with a short pause; show it stays **one row** in the audit.
+7. **Memory:** ask *"What is my name?"* and show Auralis remembers.
+8. **Non-speech:** cough once; show it never becomes text.
+9. **Latency breakdown:** explain the table above and the CPU → GPU path to 800 ms.
 
-**Evidence to keep:** screenshots of Run 1 and Run 3 of the audit, and the backend log showing `processing_ms`.
+**Evidence to keep:** screenshots of the audit runs, the Conversation panel with TTFT badges, and the backend log showing `TTFT = … ms`.
 
 ---
 
 ## Progress log
 
-### Week 1 — WebRTC foundation ✅
-> *Plan: build the frontend React app and backend aiortc server to establish a bi-directional audio stream.*
+### Week 1: WebRTC foundation ✅
+> *Plan: build the React app and aiortc server to establish a bi-directional audio stream.*
 
 | Day | Work |
 |---|---|
 | 1 | Vite + React scaffold, ESLint, microphone capture with `getUserMedia` |
 | 2 | `RTCPeerConnection`, mic track attached, SDP offer generated |
-| 3 | Offer sent to the backend's `/webrtc/offer`, answer applied, STUN/TURN configured — handshake verified end-to-end |
+| 3 | Offer sent to `/webrtc/offer`, answer applied, STUN/TURN configured; handshake verified end-to-end |
 | 4 | Remote audio playback via `ontrack` → `<audio>`; round trip verified |
 | 5 | Error handling for mic, configuration, HTTP and connection failures |
 
-### Week 2 — Voice Activity Detection ✅
-> *Plan: implement Silero VAD to detect when the user stops speaking. Mid-project review: transcription audit and latency check.*
+### Week 2: VAD, LLM & mid-project review ✅
+> *Plan: Silero VAD + Llama 3 integration. Mid-project review: transcription audit and TTFT latency check.*
 
 | Day | Work |
 |---|---|
-| 1 | DataChannel (`vad-state`) created and accepted, ICE-gathering wait, VAD badge |
+| 1 | DataChannel (`vad-state`), ICE-gathering wait, VAD badge |
 | 2 | Transcript handling |
-| 3 | End-to-end STT connected; transcript history; `audio_frame` filtering; frame counter; mic double-start guard |
+| 3 | End-to-end STT; transcript history; `audio_frame` filtering; frame counter; mic double-start guard |
 | 4 | Latency check: end-of-speech → transcript, per utterance and average |
-| 5 | Transcription audit panel; exposed and helped fix four pipeline bugs (see results above) |
-| 6 | Live mic level meter; faster ICE gathering (early exit + 3 s cap, previously a fixed 10 s wait); connection diagnostics |
-| 7 | Documentation and mid-project demo checklist (this README) |
+| 5 | Transcription audit panel; exposed and helped fix pipeline bugs |
+| 6 | Live mic level meter; faster ICE gathering (early exit + 3 s cap); connection diagnostics |
+| 7 | Documentation and demo checklist |
+| + | Fixes: utterance count, throttled frame counter, FIFO segment ↔ transcript queue, TURN config moved to `.env` |
+| + | **Conversation panel with streamed LLM reply, TTFT metrics, backend STT timing, UI polish** |
+
+### Week 3: in progress 🔄
+
+| Day | Work |
+|---|---|
+| 1 | AI audio track status, incoming packet counter from WebRTC stats, autoplay recovery button |
 
 ---
 
 ## Known limitations
 
-- **TTFT not yet measurable.** The plan's latency check is end-of-speech → first LLM token. The Llama 3 integration is pending, so the frontend currently measures end-of-speech → transcript. When the backend sends LLM output over the DataChannel, the same timer can stop on the first token instead.
-- **Latency is above the 800 ms target** (~1.7 s), dominated by Whisper on CPU.
-- **Whisper `base` accuracy** — occasional word substitutions on fast or unclear speech.
+- **Latency above the 800 ms target:** STT ~1.2 s and TTFT several seconds on a laptop CPU; GPU inference is needed.
+- **Whisper `base.en`** can still mishear unusual words that aren't in its prompt.
 - **Free public TURN server** is unreliable; production needs a dedicated TURN service.
 - **ngrok free URLs** change on every restart and must be updated in `.env`.
-- **First sentence after connecting** can occasionally be clipped while browser AGC settles.
+- **AI audio** is a test tone until TTS arrives in Week 3.
 
 ---
 
 ## Roadmap
 
-- **Week 3:** Receive emotion data from the ML pipeline; play streamed TTS audio chunks; measure true TTFT once the LLM is connected
-- **Week 4 (Refine & Polish):** Waveform visualiser reacting to both user and AI audio, emotion-driven colour shifts, interruption handling UI (AI stops when the user speaks)
+- **Week 3:** emotion badge on each user turn (from the ML model), play streamed TTS audio chunks, measure voice-reply latency
+- **Week 4 (Refine & Polish):** waveform visualiser for user and AI audio, emotion-driven colour shifts, interruption handling UI (AI stops when the user speaks)
 
 ---
 
 ## Tech stack
 
-React 19 · Vite · native WebRTC (`RTCPeerConnection`, `RTCDataChannel`, `getUserMedia`) · Web Audio API (`AnalyserNode`) · ESLint
+React 19 · Vite 8 · native WebRTC (`RTCPeerConnection`, `RTCDataChannel`, `getUserMedia`, `getStats`) · Web Audio API (`AnalyserNode`) · ESLint
 
 ## Project structure
 
 ```
 frontend/
 ├── src/
-│   ├── App.jsx      # WebRTC client, DataChannel protocol, metrics, UI
-│   ├── App.css      # Dashboard styles
+│   ├── App.jsx          # WebRTC client, DataChannel protocol, metrics, conversation, UI
+│   ├── App.css          # "Midnight Aurora" theme and layout
+│   ├── ui-polish.css    # Conversation bubbles, metric styling, readability
 │   └── main.jsx
-├── .env             # VITE_BACKEND_URL (not committed)
+├── .env                 # VITE_BACKEND_URL + TURN settings (not committed)
 ├── package.json
 └── vite.config.js
 ```
