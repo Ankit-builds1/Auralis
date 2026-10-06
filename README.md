@@ -1,259 +1,208 @@
-# Auralis — Backend
+# Auralis — ML
 
-Real-time Voice-to-Voice (V2V) Emotion Engine — **backend service**.
+Real-time Voice-to-Voice Emotion Engine: **machine learning module**.
 
-Python/`aiohttp` + `aiortc` service that receives streamed microphone audio over WebRTC, runs it through a VAD → speech-segmentation → speech-to-text pipeline, and pushes live results back to the browser over a WebRTC DataChannel.
+Speech emotion recognition from raw audio, plus the Llama prompt and streaming client that turn a transcript and a detected emotion into an empathetic reply.
 
-Part of Infotact Solutions' Advanced Generative AI Engineering internship (Project 2 of 3).
+Part of Infotact Solutions' Advanced Generative AI Engineering internship (Project 2).
 
 | Role | Owner | Branch |
 |---|---|---|
-| **Backend / WebRTC + VAD + STT (this module)** | Priya Nirmal | `Backend` |
-| Frontend / streaming UI | Ankit Dash | `frontend` |
-| Audio ML / emotion recognition | Siddhant | `ML` |
+| **ML: emotion recognition + LLM prompts (this module)** | Siddhant | `ML` |
+| Backend: WebRTC, VAD, STT, LLM streaming | Priya Nirmal | `Backend` |
+| Frontend: WebRTC client + live dashboard | Ankit Dash | `frontend` |
 
 ---
 
-## 📌 Why Auralis
-
-Most conversational AI chains Speech-to-Text → LLM → Text-to-Speech over slow request/response calls, adding 3–5 s of delay and discarding the speaker's emotional tone.
-
-Auralis instead:
-- Streams audio **continuously** over WebRTC
-- Detects the moment the user stops speaking
-- Transcribes in real time
-- *(later weeks)* Responds with an **emotion-matched voice** — targeting sub-800 ms responses
-
-**Use case:** a Crisis Negotiation Training Simulator — a trainee speaks under pressure, and the AI de-escalates in a tone matched to their emotional state.
-
----
-
-## 🏗️ Architecture
+## What this module does
 
 ```
-Browser (mic)
-    │  WebRTC SDP offer
-    ▼
-POST /webrtc/offer  ──►  aiortc RTCPeerConnection (SDP answer returned)
-    │
-    ▼
-Incoming audio track (per 20 ms frame)
-    │
-    ▼
-AudioProcessor
-    ├─ VoiceActivityDetector  (Silero VAD, ONNX, 16 kHz, 512-sample chunks)
-    ├─ SpeechSegment buffer   (pre-roll + silence hangover + min speech length)
-    └─ SpeechToText           (faster-whisper, off the event loop via asyncio.to_thread)
-    │
-    ▼
-JSON events over the WebRTC DataChannel (`vad-state`) — no polling
-    │
-    ▼
-(Week 3, Day 1) Outgoing audio track — chunked streaming groundwork,
-currently emitting a test tone ahead of real TTS output
+Speech segment (audio)            Transcript (from Whisper)
+        │                                  │
+        ▼                                  │
+ Temporal feature extraction               │
+ (40 MFCC + Δ + ΔΔ, 10 time regions,       │
+  mean + std → 2,400 features)             │
+        │                                  │
+        ▼                                  │
+ StandardScaler → SVM (RBF)                │
+        │                                  │
+        ▼                                  ▼
+ emotion label ──────────────►  Emotion-aware Llama prompt
+ (angry / disgust / fear /                 │
+  happy / neutral / sad)                   ▼
+                                Streamed, empathetic 1–2 sentence reply
 ```
-
-> Signalling is a single HTTP exchange (offer → answer); after that, audio and events flow entirely over the peer connection.
 
 ---
 
-## ✨ Features
+## Dataset: CREMA-D
 
-| Feature | What it does |
+| Item | Value |
 |---|---|
-| WebRTC signalling | `aiortc` `RTCPeerConnection`, SDP offer/answer over `POST /webrtc/offer` |
-| Health check | `GET /health` for uptime/monitoring |
-| Voice Activity Detection | Silero VAD (ONNX), 48 kHz → 16 kHz mono resampling, fixed 512-sample chunks |
-| Segmentation smoothing | 500 ms silence hangover, 300 ms pre-roll buffer, minimum speech length to reject noise |
-| Speech-to-Text | `faster-whisper` (base, CPU, int8), 48 kHz → 16 kHz resample via PyAV |
-| Non-blocking pipeline | VAD + STT run in a worker thread (`asyncio.to_thread`) so WebRTC never freezes |
-| Realtime feedback | Per-frame telemetry, VAD state, transcripts and errors pushed over the DataChannel |
-| Latency tracking | Per-frame and per-segment `latency_ms` / `processing_ms` |
-| No echo | Incoming mic audio is **not** sent back to the browser — avoids delayed echo |
-| Outgoing audio (new) | Chunked outgoing audio track streaming a test tone — groundwork for streamed TTS |
-| CORS | Locked to the frontend's Vite dev origins (`localhost:5173` / `5174`) |
+| Clips | **7,442** |
+| Actors | **91** |
+| Emotions | angry, disgust, fear, happy, sad (1,271 each), neutral (1,087) |
+| Audio | resampled to 16 kHz mono |
 
----
+**Actor-independent splits** (`GroupShuffleSplit` by `actor_id`, `random_state=42`), so the model is always tested on **voices it has never heard**:
 
-## 🔌 DataChannel Protocol
-
-The backend sends JSON messages over the `vad-state` DataChannel:
-
-| type | Fields | Frequency | Purpose |
-|---|---|---|---|
-| `status` | `status: "connected"` | Once, on channel open | Lets the frontend know the pipeline is live |
-| `audio_frame` | `frame, sample_rate, samples, pts, is_speech, segment_started, segment_finished, segment_frame_count, latency_ms` | ~50/s (one per 20 ms frame) | Per-frame telemetry |
-| `vad` | `vad_state: "speaking" \| "processing"` | Per utterance | Drives the frontend's VAD badge |
-| `transcript` | `text` | Per finished segment | Appends to the live transcript |
-| `audio_error` | `frame, error` | On failure | Surfaces backend errors to the UI |
-
-**Per-utterance sequence:** `vad: speaking` → `vad: processing` → `transcript`
-
----
-
-## 🐛 Week 2 Results — Pipeline Fixes (Mid-Project Review)
-
-The transcription audit run from the frontend exposed real pipeline bugs, found and fixed here:
-
-| Issue found | Root cause | Fix |
+| Split | Clips | Actors |
 |---|---|---|
-| Segments ended on the first quiet frame, splitting/clipping sentences | Silence detected too eagerly, no buffer before speech onset | Added a **500 ms silence hangover** + **300 ms pre-roll buffer**; added minimum speech length to skip noise |
-| WebRTC froze during transcription | `faster-whisper` ran directly on the `asyncio` event loop | Moved VAD + STT processing to a worker thread via `asyncio.to_thread` |
-| Growing processing backlog | Per-frame debug logging (100+ lines/s) | Removed per-frame logging |
-
-**Latency after fixes** (steady, end-to-end ≈ 1.7 s):
-
-| Stage | Time |
-|---|---|
-| Silence wait (end-of-speech detection) | 500 ms |
-| `faster-whisper` (base, CPU, int8) | ~1,100–1,250 ms |
-| **Total** | **~1,700 ms** |
-
-> Whisper accounts for ~70% of total latency. Paths toward the 800 ms target: a smaller model (`tiny.en`), GPU inference, or a shorter silence wait.
+| Train | 5,152 | 63 |
+| Validation | 1,142 | 14 |
+| Test | 1,148 | 14 |
 
 ---
 
-## 🚀 Getting Started
+## Experiments
 
-**Prerequisites:** Python 3.12+, pip
+| Experiment | Features | Model | Val acc | Test acc | Test macro-F1 |
+|---|---|---|---|---|---|
+| Baseline | MFCC mean (40) | Random Forest | 0.470 | 0.414 | — |
+| Advanced features | MFCC + Δ + ΔΔ + spectral + energy (246) | Random Forest | — | — | — |
+| Combined temporal + prosodic | temporal + RMS, ZCR, spectral centroid/bandwidth/rolloff/contrast | SVM RBF (C=10, balanced) | **0.528** | **0.503** | **0.498** |
+| Model comparison | combined | SVM RBF / SVM linear | 0.490 / 0.468 | 0.477 / 0.476 | 0.473 / 0.474 |
+| **Temporal (deployed)** | **MFCC + Δ + ΔΔ, 10 regions (2,400)** | **SVM RBF** | **0.513** | **0.490** | **0.482** |
+
+Chance level for 6 classes is **16.7 %**.
+
+**Tuning:** SVM `C` ∈ {1, 5, 10, 20, 50} (best ≥ 10); class weights `balanced` vs custom (no meaningful gain from custom weights).
+
+### Per-emotion results (deployed model, test set)
+
+| Emotion | Precision | Recall | F1 |
+|---|---|---|---|
+| angry | 0.54 | **0.77** | **0.63** |
+| neutral | 0.57 | 0.55 | 0.56 |
+| sad | 0.51 | 0.47 | 0.49 |
+| happy | 0.42 | 0.50 | 0.46 |
+| fear | 0.43 | 0.37 | 0.40 |
+| disgust | 0.44 | 0.29 | 0.35 |
+
+Anger is detected best; disgust and fear are most often confused with other emotions.
+
+---
+
+## Robustness
+
+Tested on the combined model (clean test accuracy 0.503):
+
+| Condition | Accuracy |
+|---|---|
+| Clean | 0.503 |
+| Volume × 0.5 / × 1.5 | 0.500 / 0.487 |
+| Clip shortened to 75 % | 0.422 |
+| Clip stretched to 125 % | 0.377 |
+| 0.25 s silence added | 0.346 |
+| Loudness normalised | 0.394 |
+| **Gaussian noise (0.02)** | **0.195** |
+
+Noise was the biggest weakness, so the model was retrained on clean + noisy copies (10,304 samples):
+
+| Model | Clean test | Noisy test |
+|---|---|---|
+| Baseline | 0.503 | **0.195** |
+| Noise-augmented | 0.469 | **0.443** |
+
+Noise augmentation more than doubles accuracy on noisy audio, at a small cost on clean audio.
+
+---
+
+## LLM: persona and streaming
+
+- `src/llm/ollama_client.py`: streams tokens from Llama via Ollama (`"stream": true`, `num_predict: 80`)
+- `src/llm/emotion_prompt.py`: "Auralis" persona: concise, empathetic, 1–2 short sentences, no bullet points, never mentions the emotion model. The detected emotion is passed as **possibly imperfect** context.
+- `src/pipeline.py`: audio file + transcript → emotion → streamed reply
+
+The backend uses an async version of this client (same persona and rules) for the live system.
+
+---
+
+## Getting Started
 
 ```bash
 git clone https://github.com/Ankit-builds1/Auralis.git
 cd Auralis
-git checkout Backend
-cd Backend
+git checkout ML
+cd ml
 
 python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # macOS/Linux
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS/Linux
 
 pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env`:
+**Trained models are not in git** (too large; `models/*.joblib` is gitignored). Place these in `ml/models/`:
 
-```env
-HOST=0.0.0.0
-PORT=8001
-ML_SERVICE_URL=http://localhost:9000
-```
-
-Run the server:
-
-```bash
-python -m app.main
-```
-
-Expose it for the frontend during dev (e.g. `ngrok http 8001`) and share the public URL for their `VITE_BACKEND_URL`.
-
----
-
-## 🧪 Testing
-
-```bash
-pytest
-```
-
-Covers VAD, PCM conversion, latency tracking, speech segmentation, and the WebRTC offer flow (`tests/`).
-
----
-
-## 🔧 Troubleshooting
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| Frontend gets a 403 / CORS error | Frontend dev server not on `localhost:5173`/`5174` | Restart frontend on an allowed port, or add the origin in `app/main.py`'s `cors_config` |
-| Frontend shows frames stuck at 0 | Backend not running, or offer request failing | Check `GET /health`, confirm logs show `[WEBRTC] SDP answer created` |
-| `ERR_CONNECTION_REFUSED` on frontend | ngrok not running, or URL rotated | Restart `ngrok http 8001`, share the new URL |
-| Latency creeping above ~2 s | Debug logging reintroduced, or STT back on event loop | Confirm no per-frame prints; confirm `asyncio.to_thread` still wraps VAD/STT |
-| Sentences still clipped/split | Silence hangover/pre-roll regressed | Check `SpeechSegment` config: 500 ms hangover, 300 ms pre-roll, min speech length |
-
----
-
-## 📅 Progress Log
-
-**Week 1 — WebRTC Foundation ✅**
-- Initialize Auralis backend
-- WebRTC signalling foundation (`/webrtc/offer`, SDP offer/answer)
-- Audio processing foundation
-- VAD pipeline foundation
-- Streaming latency groundwork
-- README + project timeline
-
-**Week 2 — Voice Activity Detection & Speech-to-Text ✅**
-- PCM audio extraction
-- Real-time Silero VAD integration
-- Speech segment tracking (groups frames into utterances)
-- WebRTC + audio processing improvements
-- Speech-to-text pipeline (`faster-whisper`)
-- Full realtime voice pipeline completed
-- Fix: silence hangover, pre-roll, minimum speech length, VAD/STT off the event loop
-- Perf: removed per-frame debug prints causing processing backlog
-- README updated per week
-
-**Week 3 — Outgoing Audio (in progress) 🔄**
-- Day 1: outgoing audio track with chunked streaming and a test tone — groundwork for streaming TTS playback
-
----
-
-## ⚠️ Known Limitations
-
-- Outgoing audio track currently streams a **test tone only** — not yet wired to real TTS output
-- TTFT not measurable yet — LLM/context engine integration is pending
-- End-to-end latency (~1.7 s) still above the 800 ms target, dominated by Whisper on CPU
-- Whisper `base` occasionally mis-transcribes fast or unclear speech
-- Free ngrok URLs rotate on every restart and must be re-shared with the frontend
-
----
-
-## 🗺️ Roadmap
-
-- **Week 3 (remaining):** connect outgoing audio track to real streamed TTS output; integrate local LLM/context engine; implement interruption handling (halt outgoing audio when incoming speech is detected)
-- **Week 4 (Refine & Polish):** latency dashboard, Whisper optimization (smaller model / GPU inference), general cleanup
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Tech |
+| File | Size |
 |---|---|
-| Web server | `aiohttp` + `aiohttp-cors` |
-| Real-time transport | `aiortc` (WebRTC, Python) |
-| Voice Activity Detection | `silero-vad` (ONNX runtime) |
-| Speech-to-Text | `faster-whisper` (CTranslate2 backend) |
-| Audio resampling | `PyAV` (`av`) — 48 kHz → 16 kHz mono |
-| Numerics | `numpy`, `torch`, `torchaudio` |
-| Testing | `pytest`, `pytest-asyncio` |
-| Config | `python-dotenv` |
+| `day7_temporal_svm_rbf.joblib` | ~94 MB |
+| `day7_temporal_scaler.joblib` | ~57 KB |
 
-Full pinned versions are in [`requirements.txt`](./requirements.txt).
+**Dataset:** download [CREMA-D](https://github.com/CheyneyComputerScience/CREMA-D) `AudioWAV` into `ml/data/raw/CREMA-D/AudioWAV/`.
+
+Run (from the `ml/` folder):
+
+```bash
+# Predict emotion for one audio file
+python -m src.models.audio_emotion
+
+# Full pipeline: audio + transcript → emotion → Llama reply (needs Ollama running)
+ollama pull llama3.2:3b
+python -m src.pipeline
+```
+
+Retrain the deployed model:
+
+```bash
+python -m src.data.create_metadata
+python -m src.data.split_dataset
+python -m src.features.extract_temporal_features
+python -m src.models.train_day7_temporal
+```
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-Backend/
-├── app/
-│   ├── main.py                  # aiohttp app + routes + CORS
-│   ├── config/
-│   │   └── settings.py          # HOST, PORT, ML_SERVICE_URL (from .env)
-│   ├── webrtc/
-│   │   ├── server.py            # /webrtc/offer handler, SDP offer/answer, track + datachannel wiring
-│   │   ├── connection.py        # RTCPeerConnection wrapper
-│   │   └── audio_track.py       # per-frame processing loop, sends events over DataChannel
-│   ├── audio/
-│   │   ├── processor.py         # VAD → segment → STT pipeline orchestration
-│   │   ├── vad/detector.py      # Silero VAD (16 kHz, 512-sample chunks)
-│   │   ├── segments/speech_segment.py  # pre-roll + hangover buffering into utterances
-│   │   ├── pcm/converter.py     # PCM conversion helpers
-│   │   └── metrics/latency.py   # per-frame latency tracking
-│   └── stt/
-│       └── transcriber.py       # faster-whisper wrapper, resample + transcribe
-├── tests/                       # pytest suite (VAD, PCM, latency, segments, WebRTC, processor)
-├── requirements.txt
-├── .env.example
-└── pytest.ini
+ml/
+├── data/
+│   ├── raw/CREMA-D/AudioWAV/       # dataset (download separately)
+│   ├── metadata/                   # labels.csv + actor-independent splits
+│   └── features/                   # generated features (gitignored)
+├── models/                         # trained .joblib files (gitignored)
+├── notebooks/                      # audio exploration
+├── results/                        # metrics, confusion matrices, error analysis
+├── src/
+│   ├── data/                       # metadata + splitting
+│   ├── features/                   # MFCC, spectral, prosodic, temporal features
+│   ├── augmentation/               # noise augmentation + evaluation
+│   ├── robustness/                 # robustness tests
+│   ├── models/                     # training, tuning, inference, error analysis
+│   ├── llm/                        # persona prompt + streaming Ollama client
+│   └── pipeline.py                 # audio + transcript → emotion → reply
+└── requirements.txt
 ```
 
-> *(Week 3's outgoing-audio-track module isn't reflected above yet — share that code to get it added.)*
+---
+
+## Progress
+
+**Week 1 ✅** CREMA-D exploration, metadata, actor-independent splits, MFCC baseline
+
+**Week 2 ✅** Advanced, prosodic and temporal features; SVM tuning; class weights; robustness tests; noise-augmented training; temporal SVM; error analysis; streaming Llama client + emotion-aware prompt
+
+**Week 3 🔄** Inference pipeline, confidence analysis, end-to-end ML pipeline; connecting the emotion model to the live backend; emotion-conditioned TTS
+
+---
+
+## Known Limitations
+
+- ~49 % accuracy on 6 emotions; CREMA-D is **acted studio speech**, so real laptop-mic voices will be harder
+- Disgust and fear are the weakest classes
+- Very sensitive to noise and added silence unless the noise-augmented model is used
+- The deployed temporal model (0.490) is slightly below the combined temporal + prosodic model (0.503); worth re-checking which to deploy
+- Model files must be shared manually (not in git)
