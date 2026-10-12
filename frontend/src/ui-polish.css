@@ -310,3 +310,7 @@
 .auralis-app .auralis-container .btn-link:hover {
   color: var(--cyan);
 }
+.auralis-app .auralis-container .bubble,
+.auralis-app .auralis-container .bubble-text {
+  text-align: left;
+}
