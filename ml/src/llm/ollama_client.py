@@ -2,12 +2,12 @@ import json
 import requests
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "llama3"
+MODEL = "llama3.2:3b"
 
 
 def generate_response(prompt: str):
     """
-    Stream response tokens from Llama 3 through Ollama.
+    Stream response tokens from Llama 3.2 (3B) through Ollama.
     Yields each token as soon as it arrives.
     """
 
@@ -54,4 +54,3 @@ if __name__ == "__main__":
         print(token, end="", flush=True)
 
     print()
-
