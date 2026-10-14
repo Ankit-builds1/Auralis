@@ -121,3 +121,5 @@ websocket-client==1.9.2
 widgetsnbextension==4.0.16
 piper-tts==1.8.0
 kokoro-onnx==0.6.1
+torch==2.14.1
+transformers==5.19.0
