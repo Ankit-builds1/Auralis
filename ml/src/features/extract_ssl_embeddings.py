@@ -27,6 +27,7 @@ from transformers import AutoFeatureExtractor, AutoModel
 MODELS = {
     "wav2vec2": "facebook/wav2vec2-base",
     "wavlm": "microsoft/wavlm-base-plus",
+    "wavlm-large": "microsoft/wavlm-large",
 }
 
 SPLIT_DIR = Path("data/metadata/splits")
