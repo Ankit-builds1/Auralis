@@ -8,3 +8,9 @@ __pycache__/
 
 # Backup/archive files
 *.zip
+
+models/tts/
+
+*.wav
+
+*.wav
