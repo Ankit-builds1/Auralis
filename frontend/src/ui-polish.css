@@ -310,7 +310,346 @@
 .auralis-app .auralis-container .btn-link:hover {
   color: var(--cyan);
 }
-.auralis-app .auralis-container .bubble,
-.auralis-app .auralis-container .bubble-text {
-  text-align: left;
+/* ---------- State colours ---------- */
+
+.auralis-app .auralis-container .metric-value.state-idle    { color: var(--text-muted); }
+.auralis-app .auralis-container .metric-value.state-active  { color: var(--cyan); }
+.auralis-app .auralis-container .metric-value.state-ai      { color: var(--violet); }
+.auralis-app .auralis-container .metric-value.state-ok      { color: var(--good); }
+.auralis-app .auralis-container .metric-value.state-error   { color: var(--bad); }
+
+.auralis-app .auralis-container .system-status.is-offline { color: var(--bad); }
+.auralis-app .auralis-container .system-status.is-offline .status-dot {
+  background: var(--bad);
+  box-shadow: 0 0 12px var(--bad);
 }
+
+.auralis-app .auralis-container .system-status.is-connecting { color: var(--warn); }
+.auralis-app .auralis-container .system-status.is-connecting .status-dot {
+  background: var(--warn);
+  box-shadow: 0 0 12px var(--warn);
+}
+
+.auralis-app .auralis-container .vad-box.is-listening { border-color: var(--cyan); }
+.auralis-app .auralis-container .vad-box.is-ai-speaking {
+  border-color: var(--violet);
+  box-shadow: 0 0 28px var(--glow-violet);
+}
+.auralis-app .auralis-container .metric {
+  padding: 14px;
+  text-align: center;
+}.auralis-app .auralis-container .dashboard-grid {
+  align-items: stretch;
+}
+
+.auralis-app .auralis-container .vad-box {
+  min-height: 150px;
+}
+.auralis-app .auralis-container .btn {
+  padding: 14px 16px;
+  font-size: 13px;
+}
+
+.auralis-app .auralis-container .conversation-box .transcript-placeholder {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 24px 0;
+}
+
+/* ================= FULL-WIDTH DESKTOP LAYOUT ================= */
+
+.auralis-app {
+  padding: 24px 32px 40px;
+}
+
+.auralis-app .auralis-container {
+  max-width: none;          /* centre wali limit hata di */
+  width: 100%;
+}
+
+@media (min-width: 1100px) {
+  .auralis-app .auralis-container .dashboard-grid {
+    grid-template-columns: minmax(340px, 1fr) minmax(340px, 1fr) minmax(420px, 1.3fr);
+    gap: 20px;
+  }
+
+  /* 3rd card = Conversation: right column, upar se Voice ke barabar lamba */
+  .auralis-app .auralis-container .dashboard-grid > .card:nth-child(3) {
+    grid-column: 3;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .auralis-app .auralis-container .dashboard-grid > .card:nth-child(3) .conversation-box {
+    flex: 1;
+    max-height: 620px;
+    min-height: 420px;
+  }
+
+  /* Audit + Events poori width me */
+  .auralis-app .auralis-container .dashboard-grid > .card:nth-child(n + 4) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ================= INTERACTIVITY (CSS only) ================= */
+
+/* Metric cards: hover par halka lift + glow */
+.auralis-app .auralis-container .metric {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auralis-app .auralis-container .metric:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-strong);
+  box-shadow: 0 8px 24px rgba(139, 125, 255, 0.18);
+}
+
+/* Buttons: press feel */
+.auralis-app .auralis-container .btn {
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
+}
+
+.auralis-app .auralis-container .btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.auralis-app .auralis-container .btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+
+/* Keyboard focus clearly dikhe */
+.auralis-app .auralis-container .btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+/* Voice box: idle me slow breathing glow, jisse "live" feel aaye */
+@keyframes auralis-breathe {
+  0%, 100% { box-shadow: 0 0 0 rgba(139, 125, 255, 0); }
+  50%      { box-shadow: 0 0 32px rgba(139, 125, 255, 0.28); }
+}
+
+.auralis-app .auralis-container .vad-box {
+  animation: auralis-breathe 4s ease-in-out infinite;
+}
+
+.auralis-app .auralis-container .vad-icon {
+  font-size: 40px;
+  transition: transform 0.3s ease;
+}
+
+.auralis-app .auralis-container .vad-box:hover .vad-icon {
+  transform: scale(1.15);
+}
+
+/* Chat bubbles aate waqt smooth animation */
+@keyframes auralis-pop {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.auralis-app .auralis-container .bubble {
+  animation: auralis-pop 0.3s ease;
+}
+
+/* Events / audit rows hover highlight */
+.auralis-app .auralis-container .event {
+  transition: background 0.15s ease;
+}
+
+.auralis-app .auralis-container .event:hover,
+.auralis-app .auralis-container .audit-table tbody tr:hover {
+  background: var(--ui-surface-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auralis-app .auralis-container .vad-box,
+  .auralis-app .auralis-container .bubble {
+    animation: none;
+  }
+}
+/* ===== Vite default patti hatao: poori screen use ho ===== */
+
+html, body {
+  width: 100%;
+  margin: 0;
+  display: block !important;
+  place-items: unset !important;
+}
+
+#root {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  text-align: left !important;
+  display: block !important;
+}
+
+.auralis-app {
+  width: 100%;
+  padding: 24px 32px 40px;
+}
+
+.auralis-app .auralis-container {
+  max-width: none !important;
+  width: 100%;
+}
+.auralis-app .auralis-container .metric-value {
+  color: var(--text-dim);
+}
+
+.auralis-app .auralis-container .metric-value.latency-good { color: var(--ui-good); }
+.auralis-app .auralis-container .metric-value.latency-warn { color: var(--ui-warn); }
+.auralis-app .auralis-container .metric-value.latency-bad  { color: var(--ui-bad); }
+/* ================= VAD STATE VISUALS ================= */
+
+/* IDLE: shaant slate */
+.auralis-app .auralis-container .vad-box.vad-idle {
+  border-color: var(--border-strong);
+}
+
+/* LISTENING: cyan pulse */
+@keyframes auralis-listen {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(56, 225, 255, 0.35); }
+  50%      { box-shadow: 0 0 0 14px rgba(56, 225, 255, 0); }
+}
+
+.auralis-app .auralis-container .vad-box.vad-listening {
+  border-color: var(--cyan);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(56, 225, 255, 0.16), transparent 70%),
+    var(--surface-deep);
+  animation: auralis-listen 1.6s ease-out infinite;
+}
+
+.auralis-app .auralis-container .vad-box.vad-listening .vad-name {
+  color: var(--cyan);
+}
+
+/* SPEAKING: violet, tez ripple */
+@keyframes auralis-speak {
+  0%   { box-shadow: 0 0 0 0 rgba(139, 125, 255, 0.55); }
+  100% { box-shadow: 0 0 0 22px rgba(139, 125, 255, 0); }
+}
+
+.auralis-app .auralis-container .vad-box.vad-speaking {
+  border-color: var(--violet);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(139, 125, 255, 0.24), transparent 70%),
+    var(--surface-deep);
+  animation: auralis-speak 0.9s ease-out infinite;
+}
+
+.auralis-app .auralis-container .vad-box.vad-speaking .vad-name {
+  color: var(--violet);
+}
+
+.auralis-app .auralis-container .vad-box.vad-speaking .vad-icon {
+  animation: auralis-bounce 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes auralis-bounce {
+  from { transform: scale(1); }
+  to   { transform: scale(1.2); }
+}
+
+/* PROCESSING: warn colour + ghoomta icon */
+@keyframes auralis-spin {
+  to { transform: rotate(360deg); }
+}
+
+.auralis-app .auralis-container .vad-box.vad-processing {
+  border-color: var(--warn);
+  animation: none;
+}
+
+.auralis-app .auralis-container .vad-box.vad-processing .vad-name {
+  color: var(--warn);
+}
+
+.auralis-app .auralis-container .vad-box.vad-processing .vad-icon {
+  display: inline-block;
+  animation: auralis-spin 1.4s linear infinite;
+}
+
+/* ================= LOGO GLOW ================= */
+
+@keyframes auralis-logo-glow {
+  0%, 100% { box-shadow: 0 0 20px var(--glow-violet), 0 0 36px var(--glow-cyan); }
+  50%      { box-shadow: 0 0 32px var(--glow-violet), 0 0 56px var(--glow-cyan); }
+}
+
+.auralis-app .auralis-container .brand-logo {
+  animation: auralis-logo-glow 3.5s ease-in-out infinite;
+}
+
+/* ================= BACKGROUND MOVING GLOWS ================= */
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  width: 520px;
+  height: 520px;
+  border-radius: 50%;
+  filter: blur(110px);
+  pointer-events: none;
+}
+
+body::before {
+  top: -140px;
+  left: -140px;
+  background: rgba(139, 125, 255, 0.18);
+  animation: auralis-drift-a 22s ease-in-out infinite alternate;
+}
+
+body::after {
+  bottom: -160px;
+  right: -140px;
+  background: rgba(56, 225, 255, 0.13);
+  animation: auralis-drift-b 26s ease-in-out infinite alternate;
+}
+
+@keyframes auralis-drift-a {
+  to { transform: translate(260px, 180px); }
+}
+
+@keyframes auralis-drift-b {
+  to { transform: translate(-260px, -160px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auralis-app .auralis-container .vad-box,
+  .auralis-app .auralis-container .vad-icon,
+  .auralis-app .auralis-container .brand-logo,
+  body::before,
+  body::after {
+    animation: none !important;
+  }
+}
+/* ================= WEEK 3 DAY 2: EMOTION ================= */
+
+.auralis-app .auralis-container .bubble-badge.emotion-upset {
+  color: var(--bad);
+  background: rgba(251, 113, 133, 0.14);
+}
+
+.auralis-app .auralis-container .bubble-badge.emotion-low {
+  color: #7aa2ff;
+  background: rgba(122, 162, 255, 0.14);
+}
+
+.auralis-app .auralis-container .bubble-badge.emotion-okay {
+  color: var(--good);
+  background: rgba(45, 212, 191, 0.14);
+}
+
+.auralis-app .auralis-container .metric-value.emotion-text-upset { color: var(--bad); }
+.auralis-app .auralis-container .metric-value.emotion-text-low   { color: #7aa2ff; }
+.auralis-app .auralis-container .metric-value.emotion-text-okay  { color: var(--good); }

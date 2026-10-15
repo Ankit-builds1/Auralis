@@ -28,6 +28,10 @@ const FRAME_UI_EVERY = 10;
 // treated as empty, so it cannot steal the next sentence's transcript.
 const TRANSCRIPT_TIMEOUT_MS = 15000;
 
+// Week 3 Day 2 fix: emotion guesses below this confidence are shown as
+// "neutral" (the raw guess is still shown in brackets for debugging).
+const EMOTION_SHOW_MIN = 0.6;
+
 // Fix #4: ICE servers come from .env instead of being hardcoded.
 // If the TURN variables are missing, only STUN is used.
 const buildIceServers = () => {
@@ -76,6 +80,46 @@ const getMeterText = (level) => {
   return 'loud';
 };
 
+// Week 3 Day 2: emoji for each emotion label sent by the backend
+const EMOTION_EMOJI = {
+  angry: '😠',
+  disgust: '🤢',
+  fear: '😨',
+  happy: '😊',
+  neutral: '😐',
+  sad: '😢',
+};
+
+// Week 3 Day 2 fix: decide what to show for one emotion result.
+// Confident  -> real label + group colour.
+// Not sure   -> "neutral" in the okay colour, raw guess kept for debugging.
+const getEmotionView = (emotion) => {
+  if (!emotion) return null;
+
+  const pct = Math.round(emotion.confidence * 100);
+  const sure = emotion.confident && emotion.confidence >= EMOTION_SHOW_MIN;
+
+  if (sure) {
+    return {
+      sure: true,
+      emoji: EMOTION_EMOJI[emotion.label] ?? '',
+      text: emotion.label,
+      group: emotion.group,
+      pct,
+      raw: emotion.label,
+    };
+  }
+
+  return {
+    sure: false,
+    emoji: EMOTION_EMOJI.neutral,
+    text: 'neutral',
+    group: 'okay',
+    pct,
+    raw: emotion.label,
+  };
+};
+
 const formatMs = (ms) => (ms === null || ms === undefined ? '—' : `${ms} ms`);
 
 const average = (values) =>
@@ -91,7 +135,7 @@ function App() {
   const [vadState, setVadState] = useState('idle');
   // Week 2: one "turn" = what the user said + Auralis's streamed reply
   // { id, time, userText, sttMs, aiText, aiState: 'waiting'|'streaming'|'done'|'error',
-  //   ttftMs, totalMs, error }
+  //   ttftMs, totalMs, error, emotion }
   const [turns, setTurns] = useState([]);
   const [events, setEvents] = useState([]);
   const [frameCount, setFrameCount] = useState(0);
@@ -99,6 +143,10 @@ function App() {
   const [ttfts, setTtfts] = useState([]);
   const [totals, setTotals] = useState([]);
   const [segments, setSegments] = useState([]);
+
+  // Week 3 Day 2: voice emotion per turn (WavLM-Large on the backend)
+  // { label, confidence, group: 'upset'|'low'|'okay', confident, ms }
+  const [emotions, setEmotions] = useState([]);
 
   // Week 3 Day 1: AI audio (backend -> browser) status
   const [aiAudio, setAiAudio] = useState('waiting');
@@ -168,6 +216,9 @@ function App() {
   const avgTtft = average(ttfts);
   const lastTotal = totals.length > 0 ? totals[totals.length - 1] : null;
 
+  const lastEmotion = emotions.length > 0 ? emotions[emotions.length - 1] : null;
+  const lastEmotionView = getEmotionView(lastEmotion);
+
   const transcribedCount = segments.filter((s) => s.transcribed).length;
   const avgSilenceWait = average(segments.map((s) => s.silenceWaitMs));
   const avgSpeech = average(segments.map((s) => s.speechMs));
@@ -206,6 +257,7 @@ function App() {
           ttftMs: null,
           totalMs: null,
           error: null,
+          emotion: null,
         },
       ].slice(-30)
     );
@@ -438,12 +490,13 @@ function App() {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          // Browser processing ON: boosts quiet mics (stronger signal for
-          // the VAD and Whisper), removes background noise, and prevents
-          // echo once TTS playback arrives in Week 3.
+          // Week 3 Day 2 fix:
+          // echoCancellation ON  -> needed once the AI speaks (TTS).
+          // noiseSuppression OFF -> keeps the natural voice tone for emotion.
+          // autoGainControl OFF  -> keeps real loudness (main cue for anger).
           echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          noiseSuppression: false,
+          autoGainControl: false,
         },
         video: false,
       });
@@ -540,6 +593,32 @@ function App() {
         }
 
         setStatus('transcript received');
+        return;
+      }
+
+      // -------- Week 3 Day 2: voice emotion (WavLM-Large) --------
+      // Sent right after the transcript, so it belongs to the newest turn
+
+      case 'emotion': {
+        if (typeof data.label !== 'string') return;
+
+        const emotion = {
+          label: data.label,
+          confidence: typeof data.confidence === 'number' ? data.confidence : 0,
+          group: data.group || 'okay',
+          confident: data.confident !== false,
+          ms: typeof data.ms === 'number' ? Math.round(data.ms) : null,
+        };
+
+        const view = getEmotionView(emotion);
+
+        setEmotions((previous) => [...previous, emotion].slice(-20));
+        updateCurrentTurn(() => ({ emotion }));
+        addEvent(
+          view.sure
+            ? `Emotion: ${emotion.label} (${view.pct}%, ${emotion.group}, ${formatMs(emotion.ms)})`
+            : `Emotion: neutral — low confidence, raw guess ${emotion.label} ${view.pct}% (${formatMs(emotion.ms)})`
+        );
         return;
       }
 
@@ -942,6 +1021,7 @@ function App() {
     setTtfts([]);
     setTotals([]);
     setSegments([]);
+    setEmotions([]);
     currentTurnIdRef.current = null;
   };
 
@@ -1049,7 +1129,7 @@ function App() {
               <span>VAD ENGINE</span>
             </div>
 
-            <div className="vad-box">
+            <div className={`vad-box vad-${vadState}`}>
               <div className="vad-state">
                 <div className="vad-icon">{getVadIcon()}</div>
                 <div className="vad-name">{getVadLabel()}</div>
@@ -1083,6 +1163,21 @@ function App() {
                 <div className="metric-value">{formatMs(lastTotal)}</div>
                 <div className="metric-sub">speech end → last AI word</div>
               </div>
+              <div className="metric">
+                <div className="metric-label">Emotion (last)</div>
+                <div className={`metric-value emotion-text-${lastEmotionView?.group ?? 'none'}`}>
+                  {lastEmotionView
+                    ? `${lastEmotionView.emoji} ${lastEmotionView.text}`
+                    : '—'}
+                </div>
+                <div className="metric-sub">
+                  {lastEmotionView
+                    ? lastEmotionView.sure
+                      ? `${lastEmotionView.pct}% · ${lastEmotionView.group} · ${formatMs(lastEmotion.ms)}`
+                      : `low confidence · guess ${lastEmotionView.raw} ${lastEmotionView.pct}% · ${formatMs(lastEmotion.ms)}`
+                    : 'voice tone · WavLM-Large'}
+                </div>
+              </div>
             </div>
           </section>
 
@@ -1092,7 +1187,7 @@ function App() {
             <div className="card-title">
               <h2>Conversation</h2>
               <span>
-                WHISPER → LLAMA 3
+                WHISPER + WAVLM → LLAMA 3
                 {turns.length > 0 && (
                   <button className="btn-link" onClick={clearHistory}>&nbsp;· CLEAR</button>
                 )}
@@ -1105,46 +1200,59 @@ function App() {
                   Connect and say something. Your words and Auralis's reply appear here.
                 </span>
               ) : (
-                turns.map((turn) => (
-                  <div className="turn" key={turn.id}>
-                    <div className="bubble bubble-user">
-                      <div className="bubble-meta">
-                        <span className="bubble-who">You</span>
-                        <span className="bubble-time">{turn.time}</span>
-                        {turn.sttMs !== null && turn.sttMs !== undefined && (
-                          <span className={`bubble-badge ${getLatencyClass(turn.sttMs)}`}>
-                            STT {turn.sttMs} ms
-                          </span>
-                        )}
-                      </div>
-                      <div className="bubble-text">{turn.userText}</div>
-                    </div>
+                turns.map((turn) => {
+                  const ev = getEmotionView(turn.emotion);
 
-                    <div className={`bubble bubble-ai ai-${turn.aiState}`}>
-                      <div className="bubble-meta">
-                        <span className="bubble-who">Auralis</span>
-                        {turn.ttftMs !== null && (
-                          <span className={`bubble-badge ${getLatencyClass(turn.ttftMs)}`}>
-                            TTFT {turn.ttftMs} ms
-                          </span>
-                        )}
-                        {turn.totalMs !== null && (
-                          <span className="bubble-badge">total {turn.totalMs} ms</span>
-                        )}
+                  return (
+                    <div className="turn" key={turn.id}>
+                      <div className="bubble bubble-user">
+                        <div className="bubble-meta">
+                          <span className="bubble-who">You</span>
+                          <span className="bubble-time">{turn.time}</span>
+                          {turn.sttMs !== null && turn.sttMs !== undefined && (
+                            <span className={`bubble-badge ${getLatencyClass(turn.sttMs)}`}>
+                              STT {turn.sttMs} ms
+                            </span>
+                          )}
+                          {ev && (
+                            <span
+                              className={`bubble-badge emotion-${ev.group}`}
+                              title={`model guess: ${ev.raw} ${ev.pct}%`}
+                            >
+                              {ev.emoji} {ev.text}{' '}
+                              {ev.sure ? `${ev.pct}%` : `(guess ${ev.raw} ${ev.pct}%)`}
+                            </span>
+                          )}
+                        </div>
+                        <div className="bubble-text">{turn.userText}</div>
                       </div>
-                      <div className="bubble-text">
-                        {turn.aiState === 'error' && `⚠ ${turn.error}`}
-                        {turn.aiState === 'waiting' && (
-                          <span className="typing">
-                            <span></span><span></span><span></span>
-                          </span>
-                        )}
-                        {(turn.aiState === 'streaming' || turn.aiState === 'done') && turn.aiText}
-                        {turn.aiState === 'streaming' && <span className="cursor">▍</span>}
+
+                      <div className={`bubble bubble-ai ai-${turn.aiState}`}>
+                        <div className="bubble-meta">
+                          <span className="bubble-who">Auralis</span>
+                          {turn.ttftMs !== null && (
+                            <span className={`bubble-badge ${getLatencyClass(turn.ttftMs)}`}>
+                              TTFT {turn.ttftMs} ms
+                            </span>
+                          )}
+                          {turn.totalMs !== null && (
+                            <span className="bubble-badge">total {turn.totalMs} ms</span>
+                          )}
+                        </div>
+                        <div className="bubble-text">
+                          {turn.aiState === 'error' && `⚠ ${turn.error}`}
+                          {turn.aiState === 'waiting' && (
+                            <span className="typing">
+                              <span></span><span></span><span></span>
+                            </span>
+                          )}
+                          {(turn.aiState === 'streaming' || turn.aiState === 'done') && turn.aiText}
+                          {turn.aiState === 'streaming' && <span className="cursor">▍</span>}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
               <div ref={transcriptEndRef} />
             </div>

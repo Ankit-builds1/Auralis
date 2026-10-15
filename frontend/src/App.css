@@ -20,8 +20,8 @@
   /* Text */
   --text: #e6e9ff;
   --text-dim: #aab2e0;
-  --text-muted: #7880b3;
-  --text-faint: #4a5184;
+  --text-muted: #8a92c6;
+  --text-faint: #6a72a6;
 
   /* Aurora accents */
   --violet: #8b7dff;
@@ -56,7 +56,7 @@ body {
   background:
     radial-gradient(ellipse at 10% 0%, rgba(139, 125, 255, 0.22), transparent 45%),
     radial-gradient(ellipse at 90% 100%, rgba(56, 225, 255, 0.16), transparent 45%),
-    radial-gradient(ellipse at 60% 40%, rgba(215, 123, 255, 0.07), transparent 50%),
+    
     var(--bg);
   background-attachment: fixed;
 }
@@ -71,7 +71,7 @@ button {
 }
 
 .auralis-container {
-  max-width: 1150px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -686,4 +686,15 @@ button {
   .auralis-app {
     padding: 18px 12px;
   }
+}/* Subtle polish: only visual */
+.auralis-app .auralis-container .card {
+  transition: border-color 0.3s ease, transform 0.2s ease;
+}
+
+.auralis-app .auralis-container .card:hover {
+  transform: translateY(-2px);
+}
+
+.auralis-app .auralis-container .btn-primary {
+  box-shadow: 0 0 20px var(--glow-violet);
 }
