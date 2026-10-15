@@ -1,121 +1,139 @@
 # Auralis — Backend
 
-Real-time Voice-to-Voice (V2V) Emotion Engine — **backend service**.
+Real-time Voice-to-Voice Emotion Engine: **backend service**.
 
-Python/`aiohttp` + `aiortc` service that receives streamed microphone audio over WebRTC, runs it through a VAD → speech-segmentation → speech-to-text pipeline, and pushes live results back to the browser over a WebRTC DataChannel.
+A Python `aiohttp` + `aiortc` server that receives microphone audio over WebRTC, detects end of speech with Silero VAD, transcribes with Faster-Whisper, and streams a reply from a local Llama model, sending every step to the browser live over a WebRTC DataChannel.
 
-Part of Infotact Solutions' Advanced Generative AI Engineering internship (Project 2 of 3).
+Part of Infotact Solutions' Advanced Generative AI Engineering internship (Project 2).
 
 | Role | Owner | Branch |
 |---|---|---|
-| **Backend / WebRTC + VAD + STT (this module)** | Priya Nirmal | `Backend` |
-| Frontend / streaming UI | Ankit Dash | `frontend` |
-| Audio ML / emotion recognition | Siddhant | `ML` |
+| **Backend: WebRTC, VAD, STT, LLM streaming (this module)** | Priya Nirmal | `Backend` |
+| Frontend: WebRTC client + live dashboard | Ankit Dash | `frontend` |
+| ML: emotion recognition + LLM prompts | Siddhant | `ML` |
 
 ---
 
-## 📌 Why Auralis
+## Why Auralis
 
-Most conversational AI chains Speech-to-Text → LLM → Text-to-Speech over slow request/response calls, adding 3–5 s of delay and discarding the speaker's emotional tone.
+Most voice assistants chain Speech-to-Text → LLM → Text-to-Speech as separate request/response calls. That adds 3–5 s of delay and throws away the speaker's tone.
 
 Auralis instead:
-- Streams audio **continuously** over WebRTC
-- Detects the moment the user stops speaking
-- Transcribes in real time
-- *(later weeks)* Responds with an **emotion-matched voice** — targeting sub-800 ms responses
+- Streams audio **continuously** over WebRTC (UDP)
+- Detects the exact moment the user stops speaking
+- Transcribes and replies as **background tasks**, so audio never stops flowing
+- Streams the LLM reply **token by token** and measures **TTFT** live
+- *(Week 3)* Adds vocal emotion and replies with an emotion-matched voice
 
-**Use case:** a Crisis Negotiation Training Simulator — a trainee speaks under pressure, and the AI de-escalates in a tone matched to their emotional state.
-
----
-
-## 🏗️ Architecture
-
-```
-Browser (mic)
-    │  WebRTC SDP offer
-    ▼
-POST /webrtc/offer  ──►  aiortc RTCPeerConnection (SDP answer returned)
-    │
-    ▼
-Incoming audio track (per 20 ms frame)
-    │
-    ▼
-AudioProcessor
-    ├─ VoiceActivityDetector  (Silero VAD, ONNX, 16 kHz, 512-sample chunks)
-    ├─ SpeechSegment buffer   (pre-roll + silence hangover + min speech length)
-    └─ SpeechToText           (faster-whisper, off the event loop via asyncio.to_thread)
-    │
-    ▼
-JSON events over the WebRTC DataChannel (`vad-state`) — no polling
-    │
-    ▼
-(Week 3, Day 1) Outgoing audio track — chunked streaming groundwork,
-currently emitting a test tone ahead of real TTS output
-```
-
-> Signalling is a single HTTP exchange (offer → answer); after that, audio and events flow entirely over the peer connection.
+**Use case:** a Crisis Negotiation Training Simulator, where a trainee speaks under pressure and the AI de-escalates.
 
 ---
 
-## ✨ Features
+## Architecture
 
-| Feature | What it does |
+```
+Browser mic ──WebRTC (Opus/UDP)──► POST /webrtc/offer → aiortc RTCPeerConnection
+                                            │
+                              IncomingAudioTrack (20 ms frames)
+                                            │
+                       AudioProcessor  (fast, runs on every frame)
+                         ├─ Silero VAD   48→16 kHz, 512-sample chunks
+                         └─ Segmenter    pre-roll · hangover · min-voice filter
+                                            │ segment finished
+                                            ▼
+                         Background "turn" task (never blocks the frame loop)
+                         ├─ Faster-Whisper base.en  → transcript   (stt_ms)
+                         └─ Llama 3.2 3B via Ollama → streamed reply (ttft_ms)
+                                            │
+                     JSON events over the DataChannel → frontend dashboard
+                                            │
+                     TTSAudioTrack (outgoing audio, Week 3: test tone today)
+```
+
+Signalling is one HTTP exchange (offer → answer). After that, audio and events flow over the peer connection.
+
+---
+
+## Features
+
+| Feature | Details |
 |---|---|
-| WebRTC signalling | `aiortc` `RTCPeerConnection`, SDP offer/answer over `POST /webrtc/offer` |
-| Health check | `GET /health` for uptime/monitoring |
-| Voice Activity Detection | Silero VAD (ONNX), 48 kHz → 16 kHz mono resampling, fixed 512-sample chunks |
-| Segmentation smoothing | 500 ms silence hangover, 300 ms pre-roll buffer, minimum speech length to reject noise |
-| Speech-to-Text | `faster-whisper` (base, CPU, int8), 48 kHz → 16 kHz resample via PyAV |
-| Non-blocking pipeline | VAD + STT run in a worker thread (`asyncio.to_thread`) so WebRTC never freezes |
-| Realtime feedback | Per-frame telemetry, VAD state, transcripts and errors pushed over the DataChannel |
-| Latency tracking | Per-frame and per-segment `latency_ms` / `processing_ms` |
-| No echo | Incoming mic audio is **not** sent back to the browser — avoids delayed echo |
-| Outgoing audio (new) | Chunked outgoing audio track streaming a test tone — groundwork for streamed TTS |
-| CORS | Locked to the frontend's Vite dev origins (`localhost:5173` / `5174`) |
+| WebRTC signalling | `aiortc`, SDP offer/answer via `POST /webrtc/offer` |
+| Health check | `GET /health` → `{"status": "ok"}` |
+| Voice Activity Detection | Silero VAD (ONNX), stateful 48→16 kHz resampler, threshold **0.5**, start after **3** speech chunks (~96 ms), end after **22** silence chunks (~700 ms) |
+| Segmentation | **300 ms** pre-roll, **100 ms** hangover, **≥200 ms of real voice** required (coughs/taps never reach Whisper), forced split at **15 s** |
+| Speech-to-Text | `faster-whisper` **base.en** (CPU, int8), `beam_size=5`, `initial_prompt` with project names, `condition_on_previous_text=False`, hallucination filter |
+| LLM | **Llama 3.2 3B** via Ollama, async streaming, "Auralis" persona, remembers the last 3 exchanges |
+| Non-blocking turns | Whisper + LLM run as background tasks; the frame loop keeps receiving audio |
+| Model warm-up | Whisper and Llama are loaded at server start, before the first user connects |
+| Latency metrics | `stt_ms`, `ttft_ms`, `total_ms`, all measured from end of speech |
+| Outgoing audio | Chunked outgoing track (test tone today), groundwork for streamed TTS |
+| No echo | Incoming mic audio is never sent back to the browser |
+| CORS | Allowed origins: `localhost:5173` / `5174` |
+
+> The LLM client (`app/llm/ollama_client.py`) is based on Siddhant's `ml/src/llm/ollama_client.py` and `emotion_prompt.py` (same persona and rules), made async so it doesn't block WebRTC.
 
 ---
 
-## 🔌 DataChannel Protocol
+## DataChannel Protocol
 
-The backend sends JSON messages over the `vad-state` DataChannel:
-
-| type | Fields | Frequency | Purpose |
-|---|---|---|---|
-| `status` | `status: "connected"` | Once, on channel open | Lets the frontend know the pipeline is live |
-| `audio_frame` | `frame, sample_rate, samples, pts, is_speech, segment_started, segment_finished, segment_frame_count, latency_ms` | ~50/s (one per 20 ms frame) | Per-frame telemetry |
-| `vad` | `vad_state: "speaking" \| "processing"` | Per utterance | Drives the frontend's VAD badge |
-| `transcript` | `text` | Per finished segment | Appends to the live transcript |
-| `audio_error` | `frame, error` | On failure | Surfaces backend errors to the UI |
-
-**Per-utterance sequence:** `vad: speaking` → `vad: processing` → `transcript`
-
----
-
-## 🐛 Week 2 Results — Pipeline Fixes (Mid-Project Review)
-
-The transcription audit run from the frontend exposed real pipeline bugs, found and fixed here:
-
-| Issue found | Root cause | Fix |
+| `type` | Fields | When |
 |---|---|---|
-| Segments ended on the first quiet frame, splitting/clipping sentences | Silence detected too eagerly, no buffer before speech onset | Added a **500 ms silence hangover** + **300 ms pre-roll buffer**; added minimum speech length to skip noise |
-| WebRTC froze during transcription | `faster-whisper` ran directly on the `asyncio` event loop | Moved VAD + STT processing to a worker thread via `asyncio.to_thread` |
-| Growing processing backlog | Per-frame debug logging (100+ lines/s) | Removed per-frame logging |
+| `status` | `status: "connected"` | Once, when the channel opens |
+| `audio_frame` | `frame, sample_rate, samples, pts, is_speech, segment_started, segment_finished, segment_frame_count, latency_ms` | ~50/s |
+| `vad` | `vad_state: "speaking" \| "processing" \| "idle"` | On state change |
+| `transcript` | `text, stt_ms` | Whisper finished |
+| `llm_start` | — | LLM starts replying |
+| `llm_token` | `text, first, ttft_ms` *(first token only)* | Each streamed token |
+| `llm_done` | `text, ttft_ms, total_ms, tokens` | Reply complete |
+| `llm_error` | `error` | Ollama unreachable / failed |
+| `audio_error` | `frame, error` | Frame processing failed |
 
-**Latency after fixes** (steady, end-to-end ≈ 1.7 s):
+**One turn:** `vad: speaking` → `vad: processing` → `transcript` → `llm_start` → `llm_token` × N → `llm_done` → `vad: idle`
 
-| Stage | Time |
+| Metric | Meaning |
 |---|---|
-| Silence wait (end-of-speech detection) | 500 ms |
-| `faster-whisper` (base, CPU, int8) | ~1,100–1,250 ms |
-| **Total** | **~1,700 ms** |
-
-> Whisper accounts for ~70% of total latency. Paths toward the 800 ms target: a smaller model (`tiny.en`), GPU inference, or a shorter silence wait.
+| `stt_ms` | End of speech → transcript ready |
+| `ttft_ms` | End of speech → first LLM word *(mid-project Latency Check)* |
+| `total_ms` | End of speech → last LLM word |
 
 ---
 
-## 🚀 Getting Started
+## Week 2 Results (Mid-Project Review)
 
-**Prerequisites:** Python 3.12+, pip
+### Transcription Audit: problems found and fixed
+
+| Problem | Root cause | Fix |
+|---|---|---|
+| Sentences split at short pauses | VAD ended speech after ~0.4 s silence, threshold 0.2 | Threshold **0.5**, end after **~700 ms** silence |
+| Names misheard ("Ankida", "BTEK") | Whisper `base`, greedy decoding, no context | **`base.en`**, `beam_size=5`, `initial_prompt` |
+| Phantom "Thank you." from noise | Coughs/taps sent to Whisper; min-length counted silence frames | Min-length now counts **real voice** only; hallucination filter |
+| Silence counted twice (~1.2 s wait) | 500 ms hangover on top of the VAD window | Hangover reduced to **100 ms** |
+| UI stuck on "PROCESSING" | No `idle` sent after transcription | `idle` sent when each turn finishes |
+| Slow first sentence | Whisper loaded on first use | Warm-up at startup |
+| WebRTC froze during Whisper | STT on the event loop | Background turn tasks |
+
+Live audit result: **5 / 5 segments transcribed correctly**, including names.
+
+### Latency Check (laptop CPU, no GPU)
+
+| Stage | Measured |
+|---|---|
+| Speech → Text (`base.en`, `beam_size=5`) | ~1.2 s |
+| TTFT with Llama 3 **8B** | 2.6 – 8.9 s (`ollama ps` showed **100 % CPU**) |
+| TTFT with Llama 3.2 **3B** | re-measuring |
+
+~0.7 s of every turn is the deliberate silence window (keeps sentences whole). The rest is Whisper and the LLM on CPU. The 800 ms target needs GPU inference; the streaming architecture is already built for it.
+
+---
+
+## Getting Started
+
+**Prerequisites:** Python 3.12+, [Ollama](https://ollama.com)
+
+```bash
+ollama pull llama3.2:3b
+```
 
 ```bash
 git clone https://github.com/Ankit-builds1/Auralis.git
@@ -124,13 +142,14 @@ git checkout Backend
 cd Backend
 
 python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # macOS/Linux
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS/Linux
 
 pip install -r requirements.txt
+copy .env.example .env          # macOS/Linux: cp .env.example .env
 ```
 
-Copy `.env.example` to `.env`:
+`.env`:
 
 ```env
 HOST=0.0.0.0
@@ -138,122 +157,130 @@ PORT=8001
 ML_SERVICE_URL=http://localhost:9000
 ```
 
-Run the server:
+Run (Ollama must be running):
 
 ```bash
 python -m app.main
 ```
 
-Expose it for the frontend during dev (e.g. `ngrok http 8001`) and share the public URL for their `VITE_BACKEND_URL`.
+Wait for:
+
+```
+[STT] Warm-up done in ... ms
+[LLM] Warm-up done (model=llama3.2:3b)
+[STARTUP] Ready
+```
+
+For a frontend on another network: `ngrok http 8001`, and share the URL as `VITE_BACKEND_URL`.
+
+Optional: change the model with `OLLAMA_MODEL=llama3` (and `OLLAMA_URL` if Ollama isn't on `localhost:11434`).
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 pytest
 ```
 
-Covers VAD, PCM conversion, latency tracking, speech segmentation, and the WebRTC offer flow (`tests/`).
+Covers VAD, PCM conversion, latency tracking, speech segmentation, the audio processor and the WebRTC offer flow.
 
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Frontend gets a 403 / CORS error | Frontend dev server not on `localhost:5173`/`5174` | Restart frontend on an allowed port, or add the origin in `app/main.py`'s `cors_config` |
-| Frontend shows frames stuck at 0 | Backend not running, or offer request failing | Check `GET /health`, confirm logs show `[WEBRTC] SDP answer created` |
-| `ERR_CONNECTION_REFUSED` on frontend | ngrok not running, or URL rotated | Restart `ngrok http 8001`, share the new URL |
-| Latency creeping above ~2 s | Debug logging reintroduced, or STT back on event loop | Confirm no per-frame prints; confirm `asyncio.to_thread` still wraps VAD/STT |
-| Sentences still clipped/split | Silence hangover/pre-roll regressed | Check `SpeechSegment` config: 500 ms hangover, 300 ms pre-roll, min speech length |
+| `[LLM] Warm-up failed` / `llm_error` | Ollama not running or model not pulled | `ollama pull llama3.2:3b`, then start Ollama |
+| Very slow replies (TTFT > 5 s) | Large model on CPU | Check `ollama ps`; use `llama3.2:3b` |
+| 403 / CORS error | Frontend not on `localhost:5173`/`5174` | Use an allowed port or add the origin in `app/main.py` |
+| `ERR_CONNECTION_REFUSED` | ngrok stopped or URL changed | Restart `ngrok http 8001`, share the new URL |
+| Sentences split | VAD settings changed | Check `detector.py`: threshold 0.5, 22 silence chunks |
+| Junk text from noise | Min-voice filter changed | Check `MIN_VOICED_FRAMES` in `processor.py` |
 
 ---
 
-## 📅 Progress Log
+## Progress Log
 
-**Week 1 — WebRTC Foundation ✅**
-- Initialize Auralis backend
-- WebRTC signalling foundation (`/webrtc/offer`, SDP offer/answer)
-- Audio processing foundation
-- VAD pipeline foundation
-- Streaming latency groundwork
-- README + project timeline
+**Week 1: WebRTC Foundation ✅**
+- aiohttp + aiortc server, `/webrtc/offer`, `/health`
+- Bi-directional audio over WebRTC, DataChannel events
+- PCM extraction, audio processing foundation
 
-**Week 2 — Voice Activity Detection & Speech-to-Text ✅**
-- PCM audio extraction
-- Real-time Silero VAD integration
-- Speech segment tracking (groups frames into utterances)
-- WebRTC + audio processing improvements
-- Speech-to-text pipeline (`faster-whisper`)
-- Full realtime voice pipeline completed
-- Fix: silence hangover, pre-roll, minimum speech length, VAD/STT off the event loop
-- Perf: removed per-frame debug prints causing processing backlog
-- README updated per week
+**Week 2: VAD + STT + LLM ✅**
+- Real-time Silero VAD with tuned end-of-speech detection
+- Speech segmentation (pre-roll, hangover, min-voice filter, 15 s cap)
+- Faster-Whisper `base.en` with accuracy fixes and hallucination filter
+- **LLM integration: Llama via Ollama, streamed token by token**
+- **TTFT measurement** (`stt_ms`, `ttft_ms`, `total_ms`)
+- Non-blocking background turns, model warm-up at startup
+- Mid-project review: transcription audit + latency check
 
-**Week 3 — Outgoing Audio (in progress) 🔄**
-- Day 1: outgoing audio track with chunked streaming and a test tone — groundwork for streaming TTS playback
+**Week 3: in progress 🔄**
+- Day 1: outgoing audio track with chunked streaming (test tone)
+- Next: connect Siddhant's emotion model, emotion-conditioned TTS, stream TTS audio
 
 ---
 
-## ⚠️ Known Limitations
+## Known Limitations
 
-- Outgoing audio track currently streams a **test tone only** — not yet wired to real TTS output
-- TTFT not measurable yet — LLM/context engine integration is pending
-- End-to-end latency (~1.7 s) still above the 800 ms target, dominated by Whisper on CPU
-- Whisper `base` occasionally mis-transcribes fast or unclear speech
-- Free ngrok URLs rotate on every restart and must be re-shared with the frontend
-
----
-
-## 🗺️ Roadmap
-
-- **Week 3 (remaining):** connect outgoing audio track to real streamed TTS output; integrate local LLM/context engine; implement interruption handling (halt outgoing audio when incoming speech is detected)
-- **Week 4 (Refine & Polish):** latency dashboard, Whisper optimization (smaller model / GPU inference), general cleanup
+- Outgoing audio is a **test tone**; real TTS comes in Week 3
+- Emotion model is copied into `app/ml_clients/` but **not yet connected** to the live pipeline
+- CPU-only latency is above the 800 ms target (GPU needed)
+- Free ngrok URLs change on every restart
 
 ---
 
-## 🛠️ Tech Stack
+## Roadmap
+
+- **Week 3:** emotion detection in the live turn (parallel with Whisper), emotion-aware prompt, emotion-conditioned TTS streamed in chunks
+- **Week 4:** interruption handling (stop AI audio when the user speaks), latency optimisation
+
+---
+
+## Tech Stack
 
 | Layer | Tech |
 |---|---|
-| Web server | `aiohttp` + `aiohttp-cors` |
-| Real-time transport | `aiortc` (WebRTC, Python) |
-| Voice Activity Detection | `silero-vad` (ONNX runtime) |
-| Speech-to-Text | `faster-whisper` (CTranslate2 backend) |
-| Audio resampling | `PyAV` (`av`) — 48 kHz → 16 kHz mono |
-| Numerics | `numpy`, `torch`, `torchaudio` |
+| Web server | `aiohttp`, `aiohttp-cors` |
+| Real-time transport | `aiortc` (WebRTC) |
+| VAD | `silero-vad` (ONNX Runtime), `torch` |
+| Speech-to-Text | `faster-whisper` (CTranslate2) |
+| LLM | Ollama + Llama 3.2 3B |
+| Audio resampling | `PyAV` (`av`) |
 | Testing | `pytest`, `pytest-asyncio` |
 | Config | `python-dotenv` |
 
-Full pinned versions are in [`requirements.txt`](./requirements.txt).
+Pinned versions: [`requirements.txt`](./requirements.txt)
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 Backend/
 ├── app/
-│   ├── main.py                  # aiohttp app + routes + CORS
-│   ├── config/
-│   │   └── settings.py          # HOST, PORT, ML_SERVICE_URL (from .env)
+│   ├── main.py                     # aiohttp app, routes, CORS, model warm-up at startup
+│   ├── config/settings.py          # HOST, PORT, ML_SERVICE_URL from .env
 │   ├── webrtc/
-│   │   ├── server.py            # /webrtc/offer handler, SDP offer/answer, track + datachannel wiring
-│   │   ├── connection.py        # RTCPeerConnection wrapper
-│   │   └── audio_track.py       # per-frame processing loop, sends events over DataChannel
+│   │   ├── server.py               # /webrtc/offer, track + DataChannel wiring
+│   │   ├── connection.py           # RTCPeerConnection wrapper
+│   │   ├── audio_track.py          # frame loop + background STT → LLM turns, DataChannel events
+│   │   └── tts_track.py            # outgoing audio track (Week 3)
 │   ├── audio/
-│   │   ├── processor.py         # VAD → segment → STT pipeline orchestration
-│   │   ├── vad/detector.py      # Silero VAD (16 kHz, 512-sample chunks)
-│   │   ├── segments/speech_segment.py  # pre-roll + hangover buffering into utterances
-│   │   ├── pcm/converter.py     # PCM conversion helpers
-│   │   └── metrics/latency.py   # per-frame latency tracking
-│   └── stt/
-│       └── transcriber.py       # faster-whisper wrapper, resample + transcribe
-├── tests/                       # pytest suite (VAD, PCM, latency, segments, WebRTC, processor)
+│   │   ├── processor.py            # VAD + segmentation (no STT here)
+│   │   ├── vad/detector.py         # Silero VAD
+│   │   ├── segments/speech_segment.py
+│   │   ├── pcm/converter.py
+│   │   └── metrics/latency.py
+│   ├── stt/
+│   │   ├── transcriber.py          # Faster-Whisper wrapper + hallucination filter
+│   │   └── engine.py               # one shared Whisper model for the server
+│   ├── llm/
+│   │   └── ollama_client.py        # async streaming Llama client + persona
+│   └── ml_clients/                 # Siddhant's emotion code (Week 3 integration)
+├── tests/
 ├── requirements.txt
 ├── .env.example
 └── pytest.ini
 ```
-
-> *(Week 3's outgoing-audio-track module isn't reflected above yet — share that code to get it added.)*
