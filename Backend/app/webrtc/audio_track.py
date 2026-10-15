@@ -1,9 +1,10 @@
-import asyncio
+﻿import asyncio
 import json
 import time
 
 from app.audio.processor import AudioProcessor
 from app.llm import ollama_client
+from app.ml_clients import emotion_engine
 from app.stt.engine import get_stt
 
 
@@ -23,16 +24,15 @@ class IncomingAudioTrack:
         frame -> VAD/segmenting (fast, every frame)
                    |
                    +-- segment finished --> background "turn" task:
-                                              Whisper  -> transcript
-                                              Llama 3  -> llm_token ... llm_done
-
-    The frame loop never waits for Whisper or the LLM, so audio keeps
-    flowing and VAD keeps working while a reply is being generated.
+                                              Whisper  -> transcript   } at the
+                                              WavLM    -> emotion      } same time
+                                              Llama    -> llm_token ... llm_done
 
     DataChannel messages sent to the frontend:
         audio_frame   ~50/s   frame info for the dashboard
         vad           speaking / processing / idle
         transcript    {text, stt_ms}
+        emotion       {label, confidence, group, confident, ms, ready_ms}
         llm_start     reply is starting
         llm_token     {text, first, ttft_ms (first token only)}
         llm_done      {text, ttft_ms, total_ms, tokens}
@@ -41,7 +41,8 @@ class IncomingAudioTrack:
 
     Timing (all measured from the moment the VAD detected end of speech):
         stt_ms   = end of speech -> transcript ready
-        ttft_ms  = end of speech -> first LLM token   (mid-project "Latency Check")
+        ready_ms = end of speech -> emotion ready
+        ttft_ms  = end of speech -> first LLM token
         total_ms = end of speech -> full LLM reply
     """
 
@@ -54,58 +55,38 @@ class IncomingAudioTrack:
         self.stt = get_stt()  # shared model, already warmed up at startup
         self.running = True
 
-        # Turns are handled one at a time, in order
         self.turn_lock = asyncio.Lock()
         self.turn_tasks = set()
 
-        # Short conversation memory for the LLM (this connection only)
         self.history = []
-
-        # Is the user currently speaking? (decides which VAD state to
-        # show when a reply finishes)
         self.user_speaking = False
-
-        # Turns waiting for or running Whisper/LLM
         self.pending_turns = 0
 
-        print("[AUDIO] IncomingAudioTrack initialized")
+        print(f"[AUDIO] IncomingAudioTrack initialized "
+              f"(emotion {'ON' if emotion_engine.is_ready() else 'OFF'})")
 
     # ==========================================================
     # DataChannel
     # ==========================================================
 
     def set_data_channel(self, channel):
-        """Attach the WebRTC DataChannel."""
         self.data_channel = channel
-
-        print(
-            f"[AUDIO] DataChannel attached: "
-            f"{getattr(channel, 'label', 'unknown')}"
-        )
+        print(f"[AUDIO] DataChannel attached: {getattr(channel, 'label', 'unknown')}")
 
     def send_event(self, payload):
-        """Send a JSON event to the frontend DataChannel."""
-
         if self.data_channel is None:
             return
-
         try:
             if self.data_channel.readyState != "open":
                 return
-
             self.data_channel.send(json.dumps(payload))
-
         except Exception as exc:
-            print(
-                f"[AUDIO] DataChannel send error: "
-                f"{type(exc).__name__}: {exc}"
-            )
+            print(f"[AUDIO] DataChannel send error: {type(exc).__name__}: {exc}")
 
     def _send_vad(self, state):
         self.send_event({"type": "vad", "vad_state": state})
 
     def _idle_or_speaking(self):
-        """VAD state to show when nothing new has started."""
         if self.user_speaking:
             self._send_vad("speaking")
         elif self.pending_turns > 0:
@@ -118,57 +99,33 @@ class IncomingAudioTrack:
     # ==========================================================
 
     async def run(self):
-        """
-        Continuously receive microphone frames and process them.
-        """
-
         print("[AUDIO] Audio processing loop started")
 
         try:
             while self.running:
-
-                # -----------------------------------------
-                # RECEIVE AUDIO FRAME
-                # -----------------------------------------
-
                 try:
                     frame = await self.source.recv()
-
                 except asyncio.CancelledError:
                     print("[AUDIO] Processing task cancelled")
                     break
-
                 except Exception as exc:
-                    print(
-                        "[AUDIO ERROR] source.recv() failed: "
-                        f"{type(exc).__name__}: {exc}"
-                    )
+                    print(f"[AUDIO ERROR] source.recv() failed: {type(exc).__name__}: {exc}")
                     break
 
                 self.frame_count += 1
 
                 if self.frame_count % DEBUG_PRINT_EVERY == 0:
                     print(
-                        f"[AUDIO DEBUG] "
-                        f"frame={self.frame_count} "
+                        f"[AUDIO DEBUG] frame={self.frame_count} "
                         f"samples={getattr(frame, 'samples', None)} "
                         f"sample_rate={getattr(frame, 'sample_rate', None)}"
                     )
 
-                # -----------------------------------------
-                # VAD + SEGMENTING (fast, in a worker thread)
-                # -----------------------------------------
-
                 try:
-                    metadata = await asyncio.to_thread(
-                        self.processor.process_frame,
-                        frame,
-                    )
+                    metadata = await asyncio.to_thread(self.processor.process_frame, frame)
                 except Exception as exc:
-                    print(
-                        f"[AUDIO ERROR] Processing frame={self.frame_count}: "
-                        f"{type(exc).__name__}: {exc}"
-                    )
+                    print(f"[AUDIO ERROR] Processing frame={self.frame_count}: "
+                          f"{type(exc).__name__}: {exc}")
                     self.send_event({
                         "type": "audio_error",
                         "frame": self.frame_count,
@@ -189,38 +146,23 @@ class IncomingAudioTrack:
                     "latency_ms": round(metadata["latency_ms"], 3),
                 })
 
-                # -----------------------------------------
-                # SPEECH STARTED
-                # -----------------------------------------
-
                 if metadata["segment_started"]:
                     self.user_speaking = True
                     print(f"[VAD] Speech started (frame={self.frame_count})")
                     self._send_vad("speaking")
 
-                # -----------------------------------------
-                # SPEECH FINISHED
-                # -----------------------------------------
-
                 if metadata["segment_finished"]:
                     self.user_speaking = False
-
-                    print(
-                        f"[VAD] Speech finished "
-                        f"(frame={self.frame_count}, "
-                        f"segment_frames={metadata['segment_frame_count']})"
-                    )
+                    print(f"[VAD] Speech finished (frame={self.frame_count}, "
+                          f"segment_frames={metadata['segment_frame_count']})")
 
                     if metadata.get("segment_skipped") or not metadata["segment"]:
-                        # Too short (cough, click). No transcript will come.
                         self._idle_or_speaking()
                         continue
 
                     self.pending_turns += 1
                     self._send_vad("processing")
 
-                    # Whisper + LLM run in the background so this loop
-                    # keeps receiving audio
                     task = asyncio.create_task(
                         self._handle_turn(
                             metadata["segment"],
@@ -233,41 +175,62 @@ class IncomingAudioTrack:
         finally:
             self.running = False
             self._cancel_turns()
-
-            print(
-                f"[AUDIO] Processing loop stopped "
-                f"after {self.frame_count} frames"
-            )
+            print(f"[AUDIO] Processing loop stopped after {self.frame_count} frames")
 
     # ==========================================================
-    # One conversation turn: STT -> LLM
+    # One conversation turn: (STT + emotion) -> LLM
     # ==========================================================
+
+    def _transcribe_timed(self, segment, speech_end_time):
+        text = self.stt.transcribe(segment)
+        return text, round((time.perf_counter() - speech_end_time) * 1000)
+
+    def _detect_emotion(self, segment, speech_end_time):
+        if not emotion_engine.is_ready():
+            return None
+        try:
+            audio = self.stt._frames_to_audio(segment)
+            result = emotion_engine.predict(audio)
+            if result is not None:
+                result["ready_ms"] = round((time.perf_counter() - speech_end_time) * 1000)
+            return result
+        except Exception as exc:
+            print(f"[EMOTION ERROR] {type(exc).__name__}: {exc}")
+            return None
 
     async def _handle_turn(self, segment, speech_end_time):
         async with self.turn_lock:
             try:
-                # ---------------- STT ----------------
-                transcript = await asyncio.to_thread(
-                    self.stt.transcribe,
-                    segment,
+                # Whisper and WavLM run at the same time in two threads
+                (transcript, stt_ms), emotion = await asyncio.gather(
+                    asyncio.to_thread(self._transcribe_timed, segment, speech_end_time),
+                    asyncio.to_thread(self._detect_emotion, segment, speech_end_time),
                 )
-
-                stt_ms = round((time.perf_counter() - speech_end_time) * 1000)
 
                 if not transcript:
                     print(f"[STT] No transcript ({stt_ms} ms)")
                     return
 
                 print(f"[STT] Transcript ({stt_ms} ms after speech end): {transcript}")
+                self.send_event({"type": "transcript", "text": transcript, "stt_ms": stt_ms})
 
-                self.send_event({
-                    "type": "transcript",
-                    "text": transcript,
-                    "stt_ms": stt_ms,
-                })
+                if emotion is not None:
+                    print(
+                        f"[EMOTION] {emotion['label']} ({emotion['confidence']:.2f}) "
+                        f"-> {emotion['group']} | model {emotion['ms']} ms, "
+                        f"ready {emotion['ready_ms']} ms after speech end"
+                    )
+                    self.send_event({
+                        "type": "emotion",
+                        "label": emotion["label"],
+                        "confidence": emotion["confidence"],
+                        "group": emotion["group"],
+                        "confident": emotion["confident"],
+                        "ms": emotion["ms"],
+                        "ready_ms": emotion["ready_ms"],
+                    })
 
-                # ---------------- LLM ----------------
-                await self._stream_llm_reply(transcript, speech_end_time)
+                await self._stream_llm_reply(transcript, speech_end_time, emotion)
 
             except asyncio.CancelledError:
                 print("[TURN] Cancelled")
@@ -282,12 +245,14 @@ class IncomingAudioTrack:
                 if self.running:
                     self._idle_or_speaking()
 
-    async def _stream_llm_reply(self, transcript, speech_end_time):
-        # TODO (emotion integration): pass Siddhant's emotion label here
+    async def _stream_llm_reply(self, transcript, speech_end_time, emotion=None):
+        use_emotion = emotion is not None and emotion["confident"]
+
         messages = ollama_client.build_messages(
             self.history,
             transcript,
-            emotion=None,
+            emotion=emotion["label"] if use_emotion else None,
+            hint=emotion["hint"] if use_emotion else None,
         )
 
         self.send_event({"type": "llm_start"})
@@ -300,7 +265,6 @@ class IncomingAudioTrack:
                 if ttft_ms is None:
                     ttft_ms = round((time.perf_counter() - speech_end_time) * 1000)
                     print(f"[LLM] First token: TTFT = {ttft_ms} ms")
-
                     self.send_event({
                         "type": "llm_token",
                         "text": token,
@@ -308,11 +272,7 @@ class IncomingAudioTrack:
                         "ttft_ms": ttft_ms,
                     })
                 else:
-                    self.send_event({
-                        "type": "llm_token",
-                        "text": token,
-                        "first": False,
-                    })
+                    self.send_event({"type": "llm_token", "text": token, "first": False})
 
                 reply_parts.append(token)
 
@@ -334,7 +294,6 @@ class IncomingAudioTrack:
             "tokens": len(reply_parts),
         })
 
-        # Remember this exchange for the next turn
         if reply:
             self.history.append({"role": "user", "content": transcript})
             self.history.append({"role": "assistant", "content": reply})
@@ -349,12 +308,7 @@ class IncomingAudioTrack:
             task.cancel()
 
     def stop(self):
-        """
-        Stop audio processing and any reply in progress.
-        """
-
         if self.running:
             print("[AUDIO] Stop requested")
-
         self.running = False
         self._cancel_turns()

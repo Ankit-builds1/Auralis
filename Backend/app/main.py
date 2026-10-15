@@ -1,10 +1,11 @@
-import asyncio
+﻿import asyncio
 
 from aiohttp import web
 import aiohttp_cors
 
 from app.config.settings import HOST, PORT
 from app.llm import ollama_client
+from app.ml_clients import emotion_engine
 from app.stt.engine import load_and_warmup
 from app.webrtc.server import offer
 
@@ -12,17 +13,21 @@ from app.webrtc.server import offer
 async def health(request):
     return web.json_response({
         "status": "ok",
-        "service": "auralis-backend"
+        "service": "auralis-backend",
+        "emotion": emotion_engine.is_ready(),
     })
 
 
 async def on_startup(app):
     """
-    Load models BEFORE the first user connects, so the first sentence
-    is not slowed down by model loading.
+    Load all models BEFORE the first user connects, so the first
+    sentence is not slowed down by model loading.
     """
     print("[STARTUP] Loading Whisper model...")
     await asyncio.to_thread(load_and_warmup)
+
+    print("[STARTUP] Loading emotion model (WavLM-Large)...")
+    await asyncio.to_thread(emotion_engine.load_and_warmup)
 
     print(f"[STARTUP] Warming up LLM ({ollama_client.OLLAMA_MODEL})...")
     await ollama_client.warmup()
@@ -61,9 +66,4 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-
-    web.run_app(
-        app,
-        host=HOST,
-        port=PORT
-    )
+    web.run_app(app, host=HOST, port=PORT)

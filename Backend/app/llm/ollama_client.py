@@ -39,12 +39,13 @@ SYSTEM_PROMPT = (
 )
 
 
-def build_messages(history, transcript, emotion=None):
+def build_messages(history, transcript, emotion=None, hint=None):
     """
     history:    list of {"role": "user"|"assistant", "content": str}
     transcript: what the user just said
-    emotion:    optional label from the emotion model (e.g. "happy").
-                Treated as possibly-wrong context, as in Siddhant's prompt.
+    emotion:    optional label from the voice emotion model (e.g. "angry")
+    hint:       optional reply-style instruction for that emotion group
+    The emotion is treated as possibly wrong; the words come first.
     """
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(history)
@@ -52,14 +53,15 @@ def build_messages(history, transcript, emotion=None):
     if emotion:
         user_content = (
             f'User said: "{transcript}"\n'
-            f'Detected emotion (may be imperfect): "{emotion}"'
+            f'Voice tone detected (may be imperfect): "{emotion}"'
         )
+        if hint:
+            user_content += f"\nReply style: {hint}"
     else:
         user_content = transcript
 
     messages.append({"role": "user", "content": user_content})
     return messages
-
 
 async def stream_reply(messages, session=None):
     """
