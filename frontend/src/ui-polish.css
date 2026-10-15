@@ -724,3 +724,84 @@ body::after {
     animation: none;
   }
 }
+
+/* ================= WEEK 3 DAY 4: LATENCY BREAKDOWN ================= */
+
+.auralis-app .auralis-container .latency-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 16px 0 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.auralis-app .auralis-container .latency-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auralis-app .auralis-container .latency-legend-ms {
+  opacity: 0.75;
+}
+
+.auralis-app .auralis-container .latency-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.auralis-app .auralis-container .stage-stt   { background: var(--cyan); }
+.auralis-app .auralis-container .stage-llm   { background: var(--violet); }
+.auralis-app .auralis-container .stage-piece { background: var(--warn); }
+.auralis-app .auralis-container .stage-tts   { background: var(--good); }
+
+.auralis-app .auralis-container .latency-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auralis-app .auralis-container .latency-row {
+  display: grid;
+  grid-template-columns: 36px 1fr 84px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.auralis-app .auralis-container .latency-row-label {
+  color: var(--text-dim);
+}
+
+.auralis-app .auralis-container .latency-row-total {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.auralis-app .auralis-container .latency-track {
+  position: relative;
+  display: flex;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--surface-deep);
+  border: 1px solid var(--border-strong);
+}
+
+.auralis-app .auralis-container .latency-segment {
+  height: 100%;
+  min-width: 2px;
+  transition: width 0.4s ease;
+}
+
+.auralis-app .auralis-container .latency-target {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #ffffff;
+  opacity: 0.7;
+}

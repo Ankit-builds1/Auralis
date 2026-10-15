@@ -128,6 +128,38 @@ const VOICE_STYLE_ICON = {
   soft: '🤍',
 };
 
+// Week 3 Day 4: latency breakdown (speech end -> Auralis starts talking)
+// Each turn's time is split into the stages that add up to "first audio".
+const LATENCY_STAGES = [
+  { key: 'stt', label: 'Speech → text', cls: 'stage-stt' },
+  { key: 'llm', label: 'Llama thinking', cls: 'stage-llm' },
+  { key: 'piece', label: 'First phrase written', cls: 'stage-piece' },
+  { key: 'tts', label: 'Voice synthesis', cls: 'stage-tts' },
+];
+const BREAKDOWN_TURNS = 8;
+
+// Split one turn's metrics into stage durations (ms), never negative
+const getStages = (m) => {
+  const stt = m.stt_ms ?? 0;
+  const ttft = m.ttft_ms ?? stt;
+  const piece = m.first_piece_ms ?? ttft;
+  const ttfa = m.ttfa_ms ?? piece;
+  return {
+    stt: Math.max(0, stt),
+    llm: Math.max(0, ttft - stt),
+    piece: Math.max(0, piece - ttft),
+    tts: Math.max(0, ttfa - piece),
+  };
+};
+
+// p-th percentile (0..100) of a list of numbers, nearest-rank method
+const percentile = (values, p) => {
+  const list = values.filter((v) => typeof v === 'number').sort((a, b) => a - b);
+  if (list.length === 0) return null;
+  const rank = Math.ceil((p / 100) * list.length) - 1;
+  return list[Math.min(list.length - 1, Math.max(0, rank))];
+};
+
 const formatMs = (ms) => (ms === null || ms === undefined ? '—' : `${ms} ms`);
 
 const average = (values) =>
@@ -159,6 +191,9 @@ function App() {
   // Week 3 Day 3: time to first audio (speech end -> Auralis starts talking)
   const [ttfas, setTtfas] = useState([]);
   const [echoCount, setEchoCount] = useState(0);
+
+  // Week 3 Day 4: one latency breakdown per turn (from 'turn_metrics')
+  const [turnMetrics, setTurnMetrics] = useState([]);
 
   // Week 3 Day 1: AI audio (backend -> browser) status
   const [aiAudio, setAiAudio] = useState('waiting');
@@ -233,6 +268,24 @@ function App() {
 
   const lastTtfa = ttfas.length > 0 ? ttfas[ttfas.length - 1] : null;
   const avgTtfa = average(ttfas);
+
+  // Week 3 Day 4: latency breakdown stats
+  const recentMetrics = turnMetrics.slice(-BREAKDOWN_TURNS);
+  const breakdownScale = Math.max(
+    LATENCY_TARGET_MS,
+    ...recentMetrics.map((m) => m.ttfa_ms ?? m.ttft_ms ?? m.stt_ms ?? 0)
+  );
+  const ttfaValues = turnMetrics.map((m) => m.ttfa_ms);
+  const p50Ttfa = percentile(ttfaValues, 50);
+  const p95Ttfa = percentile(ttfaValues, 95);
+  const avgStages = LATENCY_STAGES.map((stage) => ({
+    ...stage,
+    ms: average(turnMetrics.map((m) => getStages(m)[stage.key])),
+  }));
+  const slowestStage = avgStages.reduce(
+    (worst, stage) => ((stage.ms ?? 0) > (worst?.ms ?? -1) ? stage : worst),
+    null
+  );
 
   const transcribedCount = segments.filter((s) => s.transcribed).length;
   const avgSilenceWait = average(segments.map((s) => s.silenceWaitMs));
@@ -739,6 +792,30 @@ function App() {
         );
         return;
 
+      // -------- Week 3 Day 4: latency breakdown for the finished turn --------
+
+      case 'turn_metrics': {
+        const metrics = {
+          id: `${Date.now()}-${Math.random()}`,
+          stt_ms: data.stt_ms ?? null,
+          emotion_ms: data.emotion_ms ?? null,
+          ttft_ms: data.ttft_ms ?? null,
+          first_piece_ms: data.first_piece_ms ?? null,
+          ttfa_ms: data.ttfa_ms ?? null,
+          first_synth_ms: data.first_synth_ms ?? null,
+          total_ms: data.total_ms ?? null,
+          voice: data.voice ?? null,
+        };
+
+        setTurnMetrics((previous) => [...previous, metrics].slice(-50));
+        updateCurrentTurn(() => ({ metrics }));
+        addEvent(
+          `Latency: STT ${formatMs(metrics.stt_ms)} → first word ${formatMs(metrics.ttft_ms)} ` +
+          `→ first audio ${formatMs(metrics.ttfa_ms)}`
+        );
+        return;
+      }
+
       case 'tts_error':
         console.error('[Backend] TTS error:', data);
         addEvent(`TTS error: ${data.error}`);
@@ -1103,6 +1180,7 @@ function App() {
     setEmotions([]);
     setTtfas([]);
     setEchoCount(0);
+    setTurnMetrics([]);
     currentTurnIdRef.current = null;
   };
 
@@ -1382,6 +1460,95 @@ function App() {
                 })
               )}
               <div ref={transcriptEndRef} />
+            </div>
+          </section>
+
+          {/* LATENCY BREAKDOWN (Week 3 Day 4) */}
+
+          <section className="card full">
+            <div className="card-title">
+              <h2>Latency Breakdown</h2>
+              <span>SPEECH END → FIRST AI AUDIO · TARGET {LATENCY_TARGET_MS} MS</span>
+            </div>
+
+            <div className="audit-summary">
+              <div className="metric">
+                <div className="metric-label">First audio p50</div>
+                <div className={`metric-value ${getLatencyClass(p50Ttfa)}`}>{formatMs(p50Ttfa)}</div>
+                <div className="metric-sub">half of replies start faster</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">First audio p95</div>
+                <div className={`metric-value ${getLatencyClass(p95Ttfa)}`}>{formatMs(p95Ttfa)}</div>
+                <div className="metric-sub">worst-case (95%)</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Slowest stage</div>
+                <div className="metric-value">
+                  {turnMetrics.length > 0 && slowestStage ? slowestStage.label : '—'}
+                </div>
+                <div className="metric-sub">
+                  {turnMetrics.length > 0 && slowestStage
+                    ? `avg ${formatMs(slowestStage.ms)}`
+                    : 'needs one reply'}
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Turns measured</div>
+                <div className="metric-value">{turnMetrics.length}</div>
+                <div className="metric-sub">also saved in Backend/logs/latency.csv</div>
+              </div>
+            </div>
+
+            <div className="latency-legend">
+              {avgStages.map((stage) => (
+                <span className="latency-legend-item" key={stage.key}>
+                  <span className={`latency-swatch ${stage.cls}`} />
+                  {stage.label}
+                  {stage.ms !== null && <span className="latency-legend-ms"> · avg {stage.ms} ms</span>}
+                </span>
+              ))}
+            </div>
+
+            <div className="latency-bars">
+              {recentMetrics.length === 0 ? (
+                <div className="transcript-placeholder">
+                  Say something. Each reply's time from end of speech to the first AI audio appears here.
+                </div>
+              ) : (
+                recentMetrics.map((m, index) => {
+                  const stages = getStages(m);
+                  const end = m.ttfa_ms ?? m.ttft_ms ?? m.stt_ms ?? 0;
+
+                  return (
+                    <div className="latency-row" key={m.id}>
+                      <span className="latency-row-label">
+                        #{turnMetrics.length - recentMetrics.length + index + 1}
+                      </span>
+                      <div className="latency-track">
+                        {LATENCY_STAGES.map((stage) =>
+                          stages[stage.key] > 0 ? (
+                            <div
+                              key={stage.key}
+                              className={`latency-segment ${stage.cls}`}
+                              style={{ width: `${(stages[stage.key] / breakdownScale) * 100}%` }}
+                              title={`${stage.label}: ${stages[stage.key]} ms`}
+                            />
+                          ) : null
+                        )}
+                        <div
+                          className="latency-target"
+                          style={{ left: `${(LATENCY_TARGET_MS / breakdownScale) * 100}%` }}
+                          title={`target ${LATENCY_TARGET_MS} ms`}
+                        />
+                      </div>
+                      <span className={`latency-row-total ${getLatencyClass(end)}`}>
+                        {formatMs(end)}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </section>
 
