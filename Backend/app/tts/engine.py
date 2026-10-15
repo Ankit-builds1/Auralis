@@ -1,5 +1,5 @@
 """
-Piper text-to-speech for Auralis (Week 3 Day 3).
+Piper text-to-speech for Auralis (Week 3 Day 3, faster first audio Day 4).
 
 Why Piper: the ML branch benchmark (Week 3 Day 1) measured Piper
 en_US-lessac-medium at ~31 ms (GPU laptop) / ~200 ms (CPU laptop) per short
@@ -63,6 +63,10 @@ STYLES = {
 
 WARMUP_TEXT = "Hello, I am here with you."
 
+# Week 3 Day 4: the first spoken piece may end at a comma once it has at
+# least this many characters (0 = always wait for a full sentence).
+FIRST_CLAUSE_CHARS = int(os.getenv("TTS_FIRST_CLAUSE_CHARS", "20"))
+
 _voice = None
 _sample_rate = 22050
 _lock = threading.Lock()   # one Piper (ONNX) session, one sentence at a time
@@ -121,8 +125,8 @@ def style_name(group):
 
 def clean_text(text):
     """Remove things a voice should not read out (markdown, emojis)."""
-    text = text.replace("’", "'").replace("‘", "'")
-    text = text.replace("“", '"').replace("”", '"')
+    text = text.replace("\u2019", "'").replace("\u2018", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
     text = re.sub(r"[*_#`~>\[\]{}|]", " ", text)
     text = re.sub(r"[^\x00-\x7F]+", " ", text)      # emojis, symbols
     return re.sub(r"\s+", " ", text).strip()
@@ -173,9 +177,15 @@ def synthesize(text, group="okay"):
 
 class SentenceSplitter:
     """
-    Collects streamed LLM tokens and returns complete sentences as soon as
-    they end, so the first sentence can be spoken while Llama is still
+    Collects streamed LLM tokens and returns pieces to speak as soon as
+    they are complete, so Auralis can start talking while Llama is still
     writing the rest.
+
+    Week 3 Day 4 (faster first audio): the FIRST piece may end at a comma
+    (, ; :) once it is at least `first_clause_chars` long. A long first
+    sentence like "It's lovely to meet you, Ankit, I'm here to listen ..."
+    is then spoken from the first comma instead of waiting for the full
+    stop. Every later piece is a whole sentence (more natural rhythm).
 
         feed(" I hear you.")  -> []              (end not confirmed yet)
         feed(" Take")         -> ["I hear you."]
@@ -184,29 +194,57 @@ class SentenceSplitter:
 
     # . ! ? (optionally followed by a quote/bracket) and then whitespace
     _END = re.compile(r"[.!?]+[\"')\]]*\s+")
+    # , ; : and then whitespace  (only used for the first piece)
+    _CLAUSE = re.compile(r"[,;:]\s+")
 
-    def __init__(self, min_chars=2):
+    def __init__(self, min_chars=2, first_clause_chars=FIRST_CLAUSE_CHARS):
         self.min_chars = min_chars
+        self.first_clause_chars = first_clause_chars
         self.buffer = ""
+        self.emitted = 0
+
+    def _take(self, end):
+        piece = self.buffer[:end].strip()
+        self.buffer = self.buffer[end:]
+        if len(piece) >= self.min_chars:
+            self.emitted += 1
+            return piece
+        return None
 
     def feed(self, token):
         self.buffer += token
-        sentences = []
+        pieces = []
 
         while True:
             match = self._END.search(self.buffer)
-            if not match:
-                break
 
-            sentence = self.buffer[:match.end()].strip()
-            self.buffer = self.buffer[match.end():]
+            if match:
+                piece = self._take(match.end())
+                if piece:
+                    pieces.append(piece)
+                continue
 
-            if len(sentence) >= self.min_chars:
-                sentences.append(sentence)
+            # No full sentence yet: the first piece may end at a comma
+            if self.emitted == 0 and self.first_clause_chars > 0:
+                clause = next(
+                    (m for m in self._CLAUSE.finditer(self.buffer)
+                     if m.start() >= self.first_clause_chars),
+                    None,
+                )
+                if clause:
+                    piece = self._take(clause.end())
+                    if piece:
+                        pieces.append(piece)
+                    continue
 
-        return sentences
+            break
+
+        return pieces
 
     def flush(self):
         rest = self.buffer.strip()
         self.buffer = ""
-        return [rest] if len(rest) >= self.min_chars else []
+        if len(rest) >= self.min_chars:
+            self.emitted += 1
+            return [rest]
+        return []

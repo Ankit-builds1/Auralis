@@ -1,6 +1,10 @@
-import asyncio
+﻿import asyncio
+import csv
 import json
+import os
 import time
+from datetime import datetime
+from pathlib import Path
 
 from app.audio.processor import AudioProcessor
 from app.llm import ollama_client
@@ -21,6 +25,31 @@ HISTORY_MESSAGES = 6
 # this many seconds after it stops) is treated as Auralis hearing itself
 # through the speakers, and is ignored.
 ECHO_TAIL_S = 0.4
+
+# Week 3 Day 4: every turn's latency breakdown is appended to this CSV
+# (for p50/p95 numbers in the report). Set LATENCY_LOG=0 to turn off.
+LATENCY_LOG = os.getenv("LATENCY_LOG", "1") == "1"
+LATENCY_LOG_PATH = Path(__file__).resolve().parents[2] / "logs" / "latency.csv"
+LATENCY_FIELDS = [
+    "time", "transcript", "emotion", "voice",
+    "stt_ms", "emotion_ms", "ttft_ms", "first_piece_ms", "ttfa_ms",
+    "first_synth_ms", "total_ms", "audio_ms", "pieces", "tokens",
+]
+
+
+def _log_latency(row):
+    if not LATENCY_LOG:
+        return
+    try:
+        LATENCY_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        new_file = not LATENCY_LOG_PATH.exists()
+        with open(LATENCY_LOG_PATH, "a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=LATENCY_FIELDS, extrasaction="ignore")
+            if new_file:
+                writer.writeheader()
+            writer.writerow(row)
+    except Exception as exc:
+        print(f"[LATENCY] Could not write log: {type(exc).__name__}: {exc}")
 
 
 class IncomingAudioTrack:
@@ -47,6 +76,9 @@ class IncomingAudioTrack:
         tts_start     {ttfa_ms, style, group}        first audio of the reply
         tts_sentence  {index, text, synth_ms, audio_ms}
         tts_end       {sentences, audio_ms, ttfa_ms, style, underruns}
+        turn_metrics  {stt_ms, emotion_ms, ttft_ms, first_piece_ms, ttfa_ms,
+                       first_synth_ms, total_ms, audio_ms, pieces, voice}
+                      one latency breakdown per turn (Week 3 Day 4)
         tts_error     {error}
         echo_ignored  {}   speech heard while Auralis was talking
         llm_error     {error}
@@ -56,6 +88,7 @@ class IncomingAudioTrack:
         stt_ms   = end of speech -> transcript ready
         ready_ms = end of speech -> emotion ready
         ttft_ms  = end of speech -> first LLM token
+        first_piece_ms = end of speech -> first speakable piece of text ready
         ttfa_ms  = end of speech -> first AI audio queued   (the number users feel)
         total_ms = end of speech -> full LLM reply
     """
@@ -320,7 +353,10 @@ class IncomingAudioTrack:
                         "ready_ms": emotion["ready_ms"],
                     })
 
-                await self._stream_llm_reply(transcript, speech_end_time, emotion)
+                reply = await self._stream_llm_reply(transcript, speech_end_time, emotion)
+
+                # ---- Week 3 Day 4: one latency breakdown per turn ----
+                self._report_turn_metrics(transcript, stt_ms, emotion, reply)
 
             except asyncio.CancelledError:
                 print("[TURN] Cancelled")
@@ -382,7 +418,7 @@ class IncomingAudioTrack:
                 # A sentence is complete -> start speaking it right away
                 if speak:
                     for sentence in splitter.feed(token):
-                        sentence_queue.put_nowait(sentence)
+                        sentence_queue.put_nowait((sentence, time.perf_counter()))
 
         except RuntimeError as exc:
             llm_failed = True
@@ -398,13 +434,13 @@ class IncomingAudioTrack:
             if speak:
                 if not llm_failed:
                     for sentence in splitter.flush():
-                        sentence_queue.put_nowait(sentence)
+                        sentence_queue.put_nowait((sentence, time.perf_counter()))
                 sentence_queue.put_nowait(None)   # no more sentences
 
         if llm_failed:
             if speak_task is not None:
                 await speak_task
-            return
+            return None
 
         reply = "".join(reply_parts).strip()
         total_ms = round((time.perf_counter() - speech_end_time) * 1000)
@@ -426,8 +462,21 @@ class IncomingAudioTrack:
 
         # Keep the turn open until every sentence has been synthesized
         # (playback itself continues in TTSAudioTrack).
+        voice = {}
         if speak_task is not None:
-            await speak_task
+            voice = await speak_task or {}
+
+        return {
+            "ttft_ms": ttft_ms,
+            "total_ms": total_ms,
+            "tokens": len(reply_parts),
+            "first_piece_ms": voice.get("first_piece_ms"),
+            "ttfa_ms": voice.get("ttfa_ms"),
+            "first_synth_ms": voice.get("first_synth_ms"),
+            "audio_ms": voice.get("audio_ms", 0),
+            "pieces": voice.get("sentences", 0),
+            "voice": voice.get("style"),
+        }
 
     async def _speak_sentences(self, sentence_queue, group, speech_end_time):
         """Turn queued sentences into audio and push them to the browser."""
@@ -438,6 +487,8 @@ class IncomingAudioTrack:
             "sentences": 0,
             "audio_ms": 0,
             "ttfa_ms": None,
+            "first_piece_ms": None,
+            "first_synth_ms": None,
             "style": style,
             "underruns_start": self.tts_track.underruns,
         }
@@ -445,9 +496,13 @@ class IncomingAudioTrack:
 
         try:
             while True:
-                sentence = await sentence_queue.get()
-                if sentence is None:
+                item = await sentence_queue.get()
+                if item is None:
                     break
+
+                sentence, ready_at = item
+                if stats["first_piece_ms"] is None:
+                    stats["first_piece_ms"] = round((ready_at - speech_end_time) * 1000)
 
                 start = time.perf_counter()
                 audio = await asyncio.to_thread(tts_engine.synthesize, sentence, group)
@@ -460,6 +515,7 @@ class IncomingAudioTrack:
 
                 if stats["ttfa_ms"] is None:
                     stats["ttfa_ms"] = round((time.perf_counter() - speech_end_time) * 1000)
+                    stats["first_synth_ms"] = synth_ms
                     self.ai_speaking = True
                     print(f"[TTS] First audio: TTFA = {stats['ttfa_ms']} ms "
                           f"(voice '{style}')")
@@ -496,6 +552,49 @@ class IncomingAudioTrack:
         finally:
             if stats["sentences"] > 0:
                 self.tts_track.end_clip()
+
+        return stats
+
+    # ==========================================================
+    # Latency breakdown (Week 3 Day 4)
+    # ==========================================================
+
+    def _report_turn_metrics(self, transcript, stt_ms, emotion, reply):
+        if reply is None:
+            return
+
+        metrics = {
+            "stt_ms": stt_ms,
+            "emotion_ms": emotion["ready_ms"] if emotion else None,
+            "ttft_ms": reply["ttft_ms"],
+            "first_piece_ms": reply["first_piece_ms"],
+            "ttfa_ms": reply["ttfa_ms"],
+            "first_synth_ms": reply["first_synth_ms"],
+            "total_ms": reply["total_ms"],
+            "audio_ms": reply["audio_ms"],
+            "pieces": reply["pieces"],
+            "tokens": reply["tokens"],
+            "voice": reply["voice"],
+        }
+
+        def fmt(key):
+            value = metrics[key]
+            return "-" if value is None else f"{value}"
+
+        print(
+            f"[LATENCY] stt {fmt('stt_ms')} | emotion {fmt('emotion_ms')} | "
+            f"first token {fmt('ttft_ms')} | first piece {fmt('first_piece_ms')} | "
+            f"first audio {fmt('ttfa_ms')} | full text {fmt('total_ms')} ms"
+        )
+
+        self.send_event({"type": "turn_metrics", **metrics})
+
+        _log_latency({
+            "time": datetime.now().isoformat(timespec="seconds"),
+            "transcript": transcript,
+            "emotion": emotion["label"] if emotion else "",
+            **metrics,
+        })
 
     # ==========================================================
     # Stop

@@ -14,3 +14,4 @@ models/tts/
 *.wav
 
 *.wav
+logs/
