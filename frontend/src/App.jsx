@@ -4,7 +4,8 @@ import './ui-polish.css';
 
 const BACKEND_URL = `${import.meta.env.VITE_BACKEND_URL}/webrtc/offer`;
 
-const VAD_STATES = ['idle', 'listening', 'speaking', 'processing'];
+// Week 3 Day 3: 'ai_speaking' = Auralis is talking (Piper TTS)
+const VAD_STATES = ['idle', 'listening', 'speaking', 'processing', 'ai_speaking'];
 
 // Project target from the Auralis plan: sub-800 ms responses
 const LATENCY_TARGET_MS = 800;
@@ -120,6 +121,13 @@ const getEmotionView = (emotion) => {
   };
 };
 
+// Week 3 Day 3: voice style Piper used for the reply (from the emotion group)
+const VOICE_STYLE_ICON = {
+  normal: '🙂',
+  calm: '🫶',
+  soft: '🤍',
+};
+
 const formatMs = (ms) => (ms === null || ms === undefined ? '—' : `${ms} ms`);
 
 const average = (values) =>
@@ -147,6 +155,10 @@ function App() {
   // Week 3 Day 2: voice emotion per turn (WavLM-Large on the backend)
   // { label, confidence, group: 'upset'|'low'|'okay', confident, ms }
   const [emotions, setEmotions] = useState([]);
+
+  // Week 3 Day 3: time to first audio (speech end -> Auralis starts talking)
+  const [ttfas, setTtfas] = useState([]);
+  const [echoCount, setEchoCount] = useState(0);
 
   // Week 3 Day 1: AI audio (backend -> browser) status
   const [aiAudio, setAiAudio] = useState('waiting');
@@ -219,6 +231,9 @@ function App() {
   const lastEmotion = emotions.length > 0 ? emotions[emotions.length - 1] : null;
   const lastEmotionView = getEmotionView(lastEmotion);
 
+  const lastTtfa = ttfas.length > 0 ? ttfas[ttfas.length - 1] : null;
+  const avgTtfa = average(ttfas);
+
   const transcribedCount = segments.filter((s) => s.transcribed).length;
   const avgSilenceWait = average(segments.map((s) => s.silenceWaitMs));
   const avgSpeech = average(segments.map((s) => s.speechMs));
@@ -258,6 +273,8 @@ function App() {
           totalMs: null,
           error: null,
           emotion: null,
+          // Week 3 Day 3: { style, ttfaMs, speaking, sentences, audioMs }
+          voice: null,
         },
       ].slice(-30)
     );
@@ -548,6 +565,11 @@ function App() {
           setFrameCount(frame);
         }
 
+        // Week 3 Day 3: speech heard while Auralis is talking is echo
+        // (its own voice through the speakers). The backend ignores it,
+        // so it is also kept out of the latency clock and the audit table.
+        if (data.echo) return;
+
         if (data.is_speech) {
           lastSpeechAtRef.current = performance.now();
         }
@@ -561,6 +583,9 @@ function App() {
           addEvent(`VAD: ${data.vad_state}`);
           if (data.vad_state === 'processing') {
             setStatus('transcribing...');
+          }
+          if (data.vad_state === 'ai_speaking') {
+            setStatus('Auralis is speaking...');
           }
         }
         return;
@@ -669,6 +694,60 @@ function App() {
         setStatus('reply received');
         return;
       }
+
+      // -------- Week 3 Day 3: Auralis speaks (Piper TTS) --------
+
+      case 'tts_start': {
+        const ttfa = typeof data.ttfa_ms === 'number' ? Math.round(data.ttfa_ms) : null;
+        const style = data.style || 'normal';
+
+        if (ttfa !== null) {
+          setTtfas((previous) => [...previous, ttfa].slice(-20));
+        }
+
+        updateCurrentTurn(() => ({
+          voice: { style, ttfaMs: ttfa, speaking: true, sentences: 0, audioMs: 0 },
+        }));
+        setStatus('Auralis is speaking...');
+        addEvent(`AI voice started (TTFA ${formatMs(ttfa)}, ${style} voice)`);
+        return;
+      }
+
+      case 'tts_sentence':
+        updateCurrentTurn((t) => ({
+          voice: {
+            ...(t.voice || { style: 'normal', ttfaMs: null, speaking: true }),
+            sentences: data.index ?? (t.voice?.sentences ?? 0) + 1,
+            audioMs: (t.voice?.audioMs ?? 0) + (data.audio_ms ?? 0),
+          },
+        }));
+        return;
+
+      case 'tts_end':
+        updateCurrentTurn((t) => ({
+          voice: {
+            ...(t.voice || { style: data.style || 'normal', ttfaMs: data.ttfa_ms ?? null }),
+            speaking: false,
+            sentences: data.sentences ?? t.voice?.sentences ?? 0,
+            audioMs: data.audio_ms ?? t.voice?.audioMs ?? 0,
+          },
+        }));
+        setStatus('reply spoken');
+        addEvent(
+          `AI voice done (${data.sentences ?? '?'} sentences, ` +
+          `${formatMs(data.audio_ms)} audio, ${data.underruns ?? 0} gaps)`
+        );
+        return;
+
+      case 'tts_error':
+        console.error('[Backend] TTS error:', data);
+        addEvent(`TTS error: ${data.error}`);
+        return;
+
+      case 'echo_ignored':
+        setEchoCount((count) => count + 1);
+        addEvent('Echo ignored (speech heard while Auralis was talking)');
+        return;
 
       case 'llm_error':
         console.error('[Backend] LLM error:', data);
@@ -1022,6 +1101,8 @@ function App() {
     setTotals([]);
     setSegments([]);
     setEmotions([]);
+    setTtfas([]);
+    setEchoCount(0);
     currentTurnIdRef.current = null;
   };
 
@@ -1030,10 +1111,15 @@ function App() {
   // ---------------------------------------------------------
 
   const getVadIcon = () =>
-    ({ speaking: '🗣️', listening: '🎧', processing: '⚙️' }[vadState] || '◉');
+    ({ speaking: '🗣️', listening: '🎧', processing: '⚙️', ai_speaking: '🔊' }[vadState] || '◉');
 
   const getVadLabel = () =>
-    ({ speaking: 'SPEAKING', listening: 'LISTENING', processing: 'PROCESSING' }[vadState] || 'IDLE');
+    ({
+      speaking: 'SPEAKING',
+      listening: 'LISTENING',
+      processing: 'PROCESSING',
+      ai_speaking: 'AURALIS SPEAKING',
+    }[vadState] || 'IDLE');
 
   // ---------------------------------------------------------
   // UI
@@ -1092,6 +1178,16 @@ function App() {
               <div className="metric">
                 <div className="metric-label">AI packets</div>
                 <div className="metric-value">{aiPackets}</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">AI voice</div>
+                <div className={`metric-value ${vadState === 'ai_speaking' ? 'latency-good' : ''}`}>
+                  {vadState === 'ai_speaking' ? 'speaking' : 'quiet'}
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Echo ignored</div>
+                <div className="metric-value">{echoCount}</div>
               </div>
             </div>
 
@@ -1163,6 +1259,17 @@ function App() {
                 <div className="metric-value">{formatMs(lastTotal)}</div>
                 <div className="metric-sub">speech end → last AI word</div>
               </div>
+              <div className="metric metric-highlight">
+                <div className="metric-label">Time to first audio (last)</div>
+                <div className={`metric-value ${getLatencyClass(lastTtfa)}`}>
+                  {formatMs(lastTtfa)}
+                </div>
+                <div className="metric-sub">
+                  {ttfas.length > 0
+                    ? `avg ${formatMs(avgTtfa)} · speech end → AI voice`
+                    : 'speech end → AI voice'}
+                </div>
+              </div>
               <div className="metric">
                 <div className="metric-label">Emotion (last)</div>
                 <div className={`metric-value emotion-text-${lastEmotionView?.group ?? 'none'}`}>
@@ -1187,7 +1294,7 @@ function App() {
             <div className="card-title">
               <h2>Conversation</h2>
               <span>
-                WHISPER + WAVLM → LLAMA 3
+                WHISPER + WAVLM → LLAMA 3 → PIPER
                 {turns.length > 0 && (
                   <button className="btn-link" onClick={clearHistory}>&nbsp;· CLEAR</button>
                 )}
@@ -1227,7 +1334,11 @@ function App() {
                         <div className="bubble-text">{turn.userText}</div>
                       </div>
 
-                      <div className={`bubble bubble-ai ai-${turn.aiState}`}>
+                      <div
+                        className={`bubble bubble-ai ai-${turn.aiState}${
+                          turn.voice?.speaking ? ' ai-voice-live' : ''
+                        }`}
+                      >
                         <div className="bubble-meta">
                           <span className="bubble-who">Auralis</span>
                           {turn.ttftMs !== null && (
@@ -1237,6 +1348,22 @@ function App() {
                           )}
                           {turn.totalMs !== null && (
                             <span className="bubble-badge">total {turn.totalMs} ms</span>
+                          )}
+                          {turn.voice && (
+                            <span
+                              className={`bubble-badge voice-${turn.voice.style}${
+                                turn.voice.speaking ? ' voice-live' : ''
+                              }`}
+                              title={`${turn.voice.sentences ?? 0} sentences · ${formatMs(turn.voice.audioMs)} audio`}
+                            >
+                              {turn.voice.speaking ? '🔊' : (VOICE_STYLE_ICON[turn.voice.style] ?? '🔈')}{' '}
+                              {turn.voice.style} voice
+                            </span>
+                          )}
+                          {turn.voice?.ttfaMs !== null && turn.voice?.ttfaMs !== undefined && (
+                            <span className={`bubble-badge ${getLatencyClass(turn.voice.ttfaMs)}`}>
+                              TTFA {turn.voice.ttfaMs} ms
+                            </span>
                           )}
                         </div>
                         <div className="bubble-text">

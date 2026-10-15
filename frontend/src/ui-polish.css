@@ -653,3 +653,74 @@ body::after {
 .auralis-app .auralis-container .metric-value.emotion-text-upset { color: var(--bad); }
 .auralis-app .auralis-container .metric-value.emotion-text-low   { color: #7aa2ff; }
 .auralis-app .auralis-container .metric-value.emotion-text-okay  { color: var(--good); }
+
+
+/* ================= WEEK 3 DAY 3: AURALIS SPEAKS ================= */
+
+/* VAD box: AI SPEAKING -> green "sound wave" rings */
+@keyframes auralis-voice-wave {
+  0%   { box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.5), 0 0 0 0 rgba(45, 212, 191, 0.25); }
+  100% { box-shadow: 0 0 0 16px rgba(45, 212, 191, 0), 0 0 0 30px rgba(45, 212, 191, 0); }
+}
+
+@keyframes auralis-voice-icon {
+  0%, 100% { transform: scale(1); }
+  30%      { transform: scale(1.18); }
+  60%      { transform: scale(0.95); }
+}
+
+.auralis-app .auralis-container .vad-box.vad-ai_speaking {
+  border-color: var(--good);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(45, 212, 191, 0.18), transparent 70%),
+    var(--surface-deep);
+  animation: auralis-voice-wave 1.1s ease-out infinite;
+}
+
+.auralis-app .auralis-container .vad-box.vad-ai_speaking .vad-name {
+  color: var(--good);
+}
+
+.auralis-app .auralis-container .vad-box.vad-ai_speaking .vad-icon {
+  display: inline-block;
+  animation: auralis-voice-icon 0.8s ease-in-out infinite;
+}
+
+/* AI bubble while its voice is playing */
+.auralis-app .auralis-container .bubble-ai.ai-voice-live {
+  border-color: var(--good);
+  box-shadow: 0 0 18px rgba(45, 212, 191, 0.25);
+}
+
+/* Voice style badges (emotion -> Piper style) */
+.auralis-app .auralis-container .bubble-badge.voice-normal {
+  color: var(--good);
+  border-color: var(--good);
+}
+
+.auralis-app .auralis-container .bubble-badge.voice-calm {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.auralis-app .auralis-container .bubble-badge.voice-soft {
+  color: #7aa2ff;
+  border-color: #7aa2ff;
+}
+
+@keyframes auralis-voice-badge {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.auralis-app .auralis-container .bubble-badge.voice-live {
+  animation: auralis-voice-badge 0.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auralis-app .auralis-container .vad-box.vad-ai_speaking,
+  .auralis-app .auralis-container .vad-box.vad-ai_speaking .vad-icon,
+  .auralis-app .auralis-container .bubble-badge.voice-live {
+    animation: none;
+  }
+}
