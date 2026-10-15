@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import json
 import time
 
@@ -6,6 +6,7 @@ from app.audio.processor import AudioProcessor
 from app.llm import ollama_client
 from app.ml_clients import emotion_engine
 from app.stt.engine import get_stt
+from app.tts import engine as tts_engine
 
 
 # Print a progress line every N frames instead of every frame.
@@ -15,6 +16,11 @@ DEBUG_PRINT_EVERY = 250
 # How many previous messages (user + assistant) the LLM sees.
 # 6 = the last 3 exchanges.
 HISTORY_MESSAGES = 6
+
+# Echo protection: speech that starts while Auralis is talking (or within
+# this many seconds after it stops) is treated as Auralis hearing itself
+# through the speakers, and is ignored.
+ECHO_TAIL_S = 0.4
 
 
 class IncomingAudioTrack:
@@ -27,15 +33,22 @@ class IncomingAudioTrack:
                                               Whisper  -> transcript   } at the
                                               WavLM    -> emotion      } same time
                                               Llama    -> llm_token ... llm_done
+                                              Piper    -> spoken reply, sentence
+                                                          by sentence (Week 3 Day 3)
 
     DataChannel messages sent to the frontend:
-        audio_frame   ~50/s   frame info for the dashboard
-        vad           speaking / processing / idle
+        audio_frame   ~50/s   frame info for the dashboard (+ echo flag)
+        vad           speaking / processing / ai_speaking / idle
         transcript    {text, stt_ms}
         emotion       {label, confidence, group, confident, ms, ready_ms}
         llm_start     reply is starting
         llm_token     {text, first, ttft_ms (first token only)}
         llm_done      {text, ttft_ms, total_ms, tokens}
+        tts_start     {ttfa_ms, style, group}        first audio of the reply
+        tts_sentence  {index, text, synth_ms, audio_ms}
+        tts_end       {sentences, audio_ms, ttfa_ms, style, underruns}
+        tts_error     {error}
+        echo_ignored  {}   speech heard while Auralis was talking
         llm_error     {error}
         audio_error   {frame, error}
 
@@ -43,10 +56,11 @@ class IncomingAudioTrack:
         stt_ms   = end of speech -> transcript ready
         ready_ms = end of speech -> emotion ready
         ttft_ms  = end of speech -> first LLM token
+        ttfa_ms  = end of speech -> first AI audio queued   (the number users feel)
         total_ms = end of speech -> full LLM reply
     """
 
-    def __init__(self, source, data_channel=None):
+    def __init__(self, source, data_channel=None, tts_track=None):
         self.source = source
         self.data_channel = data_channel
 
@@ -62,8 +76,22 @@ class IncomingAudioTrack:
         self.user_speaking = False
         self.pending_turns = 0
 
-        print(f"[AUDIO] IncomingAudioTrack initialized "
-              f"(emotion {'ON' if emotion_engine.is_ready() else 'OFF'})")
+        # ---- Week 3 Day 3: AI voice ----
+        self.tts_track = tts_track
+        self.ai_speaking = False
+        self.ai_finished_at = 0.0
+        self.segment_is_echo = False
+        self.tts_stats = None
+
+        if self.tts_track is not None:
+            # TTSAudioTrack calls this with "started" / "finished"
+            self.tts_track._on_state = self._on_tts_state
+
+        print(
+            f"[AUDIO] IncomingAudioTrack initialized "
+            f"(emotion {'ON' if emotion_engine.is_ready() else 'OFF'}, "
+            f"voice {'ON' if self._tts_on() else 'OFF'})"
+        )
 
     # ==========================================================
     # DataChannel
@@ -89,10 +117,54 @@ class IncomingAudioTrack:
     def _idle_or_speaking(self):
         if self.user_speaking:
             self._send_vad("speaking")
+        elif self.ai_speaking:
+            self._send_vad("ai_speaking")
         elif self.pending_turns > 0:
             self._send_vad("processing")
         else:
             self._send_vad("idle")
+
+    # ==========================================================
+    # AI voice state (Week 3 Day 3)
+    # ==========================================================
+
+    def _tts_on(self):
+        return self.tts_track is not None and tts_engine.is_ready()
+
+    def _ai_busy(self):
+        """True while Auralis is talking, plus a short echo tail after."""
+        if self.ai_speaking:
+            return True
+        return (time.perf_counter() - self.ai_finished_at) < ECHO_TAIL_S
+
+    def _on_tts_state(self, event):
+        """Called by TTSAudioTrack when playback starts / ends."""
+        if event == "started":
+            self.ai_speaking = True
+            self._send_vad("ai_speaking")
+
+        elif event == "finished":
+            self.ai_speaking = False
+            self.ai_finished_at = time.perf_counter()
+
+            stats = self.tts_stats or {}
+            underruns = self.tts_track.underruns - stats.get("underruns_start", 0)
+
+            print(
+                f"[TTS] Playback finished: {stats.get('sentences', 0)} sentences, "
+                f"{stats.get('audio_ms', 0)} ms audio, underruns {underruns}"
+            )
+            self.send_event({
+                "type": "tts_end",
+                "sentences": stats.get("sentences", 0),
+                "audio_ms": stats.get("audio_ms", 0),
+                "ttfa_ms": stats.get("ttfa_ms"),
+                "style": stats.get("style"),
+                "underruns": underruns,
+            })
+
+            if self.running:
+                self._idle_or_speaking()
 
     # ==========================================================
     # Frame loop
@@ -133,6 +205,12 @@ class IncomingAudioTrack:
                     })
                     continue
 
+                # Decide once, at the start of a segment, whether it is echo
+                if metadata["segment_started"]:
+                    self.segment_is_echo = self._ai_busy()
+
+                is_echo = self.segment_is_echo
+
                 self.send_event({
                     "type": "audio_frame",
                     "frame": self.frame_count,
@@ -144,14 +222,26 @@ class IncomingAudioTrack:
                     "segment_finished": metadata["segment_finished"],
                     "segment_frame_count": metadata["segment_frame_count"],
                     "latency_ms": round(metadata["latency_ms"], 3),
+                    "echo": is_echo,
                 })
 
                 if metadata["segment_started"]:
-                    self.user_speaking = True
-                    print(f"[VAD] Speech started (frame={self.frame_count})")
-                    self._send_vad("speaking")
+                    if is_echo:
+                        print(f"[ECHO] Speech while Auralis is talking "
+                              f"(frame={self.frame_count}) - will be ignored")
+                    else:
+                        self.user_speaking = True
+                        print(f"[VAD] Speech started (frame={self.frame_count})")
+                        self._send_vad("speaking")
 
                 if metadata["segment_finished"]:
+                    self.segment_is_echo = False
+
+                    if is_echo:
+                        print("[ECHO] Segment ignored (Auralis was speaking)")
+                        self.send_event({"type": "echo_ignored"})
+                        continue
+
                     self.user_speaking = False
                     print(f"[VAD] Speech finished (frame={self.frame_count}, "
                           f"segment_frames={metadata['segment_frame_count']})")
@@ -178,7 +268,7 @@ class IncomingAudioTrack:
             print(f"[AUDIO] Processing loop stopped after {self.frame_count} frames")
 
     # ==========================================================
-    # One conversation turn: (STT + emotion) -> LLM
+    # One conversation turn: (STT + emotion) -> LLM -> voice
     # ==========================================================
 
     def _transcribe_timed(self, segment, speech_end_time):
@@ -255,10 +345,23 @@ class IncomingAudioTrack:
             hint=emotion["hint"] if use_emotion else None,
         )
 
+        # ---- Week 3 Day 3: speak the reply while it is being written ----
+        voice_group = emotion["group"] if use_emotion else "okay"
+        speak = self._tts_on()
+        splitter = tts_engine.SentenceSplitter()
+        sentence_queue = asyncio.Queue() if speak else None
+        speak_task = None
+
+        if speak:
+            speak_task = asyncio.create_task(
+                self._speak_sentences(sentence_queue, voice_group, speech_end_time)
+            )
+
         self.send_event({"type": "llm_start"})
 
         reply_parts = []
         ttft_ms = None
+        llm_failed = False
 
         try:
             async for token in ollama_client.stream_reply(messages):
@@ -276,9 +379,31 @@ class IncomingAudioTrack:
 
                 reply_parts.append(token)
 
+                # A sentence is complete -> start speaking it right away
+                if speak:
+                    for sentence in splitter.feed(token):
+                        sentence_queue.put_nowait(sentence)
+
         except RuntimeError as exc:
+            llm_failed = True
             print(f"[LLM ERROR] {exc}")
             self.send_event({"type": "llm_error", "error": str(exc)})
+
+        except asyncio.CancelledError:
+            if speak_task is not None:
+                speak_task.cancel()
+            raise
+
+        finally:
+            if speak:
+                if not llm_failed:
+                    for sentence in splitter.flush():
+                        sentence_queue.put_nowait(sentence)
+                sentence_queue.put_nowait(None)   # no more sentences
+
+        if llm_failed:
+            if speak_task is not None:
+                await speak_task
             return
 
         reply = "".join(reply_parts).strip()
@@ -298,6 +423,79 @@ class IncomingAudioTrack:
             self.history.append({"role": "user", "content": transcript})
             self.history.append({"role": "assistant", "content": reply})
             self.history = self.history[-HISTORY_MESSAGES:]
+
+        # Keep the turn open until every sentence has been synthesized
+        # (playback itself continues in TTSAudioTrack).
+        if speak_task is not None:
+            await speak_task
+
+    async def _speak_sentences(self, sentence_queue, group, speech_end_time):
+        """Turn queued sentences into audio and push them to the browser."""
+        sample_rate = tts_engine.sample_rate()
+        style = tts_engine.style_name(group)
+
+        stats = {
+            "sentences": 0,
+            "audio_ms": 0,
+            "ttfa_ms": None,
+            "style": style,
+            "underruns_start": self.tts_track.underruns,
+        }
+        self.tts_stats = stats
+
+        try:
+            while True:
+                sentence = await sentence_queue.get()
+                if sentence is None:
+                    break
+
+                start = time.perf_counter()
+                audio = await asyncio.to_thread(tts_engine.synthesize, sentence, group)
+                synth_ms = round((time.perf_counter() - start) * 1000)
+
+                if audio.size == 0:
+                    continue
+
+                audio_ms = round(len(audio) / sample_rate * 1000)
+
+                if stats["ttfa_ms"] is None:
+                    stats["ttfa_ms"] = round((time.perf_counter() - speech_end_time) * 1000)
+                    self.ai_speaking = True
+                    print(f"[TTS] First audio: TTFA = {stats['ttfa_ms']} ms "
+                          f"(voice '{style}')")
+                    self.send_event({
+                        "type": "tts_start",
+                        "ttfa_ms": stats["ttfa_ms"],
+                        "style": style,
+                        "group": group,
+                    })
+                    self._send_vad("ai_speaking")
+
+                self.tts_track.push_chunk(audio, sample_rate)
+
+                stats["sentences"] += 1
+                stats["audio_ms"] += audio_ms
+
+                print(f"[TTS] Sentence {stats['sentences']} "
+                      f"({synth_ms} ms synth, {audio_ms} ms audio): {sentence}")
+                self.send_event({
+                    "type": "tts_sentence",
+                    "index": stats["sentences"],
+                    "text": sentence,
+                    "synth_ms": synth_ms,
+                    "audio_ms": audio_ms,
+                })
+
+        except asyncio.CancelledError:
+            raise
+
+        except Exception as exc:
+            print(f"[TTS ERROR] {type(exc).__name__}: {exc}")
+            self.send_event({"type": "tts_error", "error": str(exc)})
+
+        finally:
+            if stats["sentences"] > 0:
+                self.tts_track.end_clip()
 
     # ==========================================================
     # Stop

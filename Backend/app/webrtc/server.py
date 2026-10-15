@@ -9,8 +9,9 @@ from app.webrtc.tts_track import TTSAudioTrack, play_test_tone
 
 
 # Day 1 test: play a short beep when the data channel opens, to prove
-# the outgoing audio path works. Set to False once real replies exist.
-PLAY_CONNECT_BEEP = True
+# the outgoing audio path works. Off since Week 3 Day 3: Auralis now
+# speaks its real replies (Piper TTS).
+PLAY_CONNECT_BEEP = False
 
 
 async def offer(request):
@@ -125,9 +126,12 @@ async def offer(request):
             "attached to audio processor"
         )
 
+        # Week 3 Day 3: the processor also gets the outgoing voice track,
+        # so it can speak replies and ignore its own echo
         audio_processor = IncomingAudioTrack(
             track,
             data_channel,
+            tts_track=tts_track,
         )
 
         processing_task = asyncio.create_task(
