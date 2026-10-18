@@ -1,0 +1,4 @@
+test_set,clips,before_acc,after_acc,before_3group,after_3group
+our voices (held out),18,0.222,0.444,0.278,0.5
+CREMA-D test,1148,0.746,0.741,0.807,0.806
+  speaker ankit,18,0.222,0.444,0.278,0.5
