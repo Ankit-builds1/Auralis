@@ -35,8 +35,33 @@ SYSTEM_PROMPT = (
     "Keep every response to 1-2 short sentences. "
     "Do not use bullet points, lists, emojis or markdown. "
     "Do not repeat the user's statement. "
-    "Do not mention an emotion model or that you are an AI."
+    "Do not mention an emotion model or that you are an AI. "
+    "If the user talks about hurting themselves, ending their life or "
+    "not wanting to live, never treat it as anger or frustration: reply "
+    "with warmth, ask gently if they are safe right now, and tell them "
+    "they can call the Tele-MANAS helpline on 14416 at any time. "
+    "You cannot call, message or contact anyone, so never offer to."
 )
+
+# Words that can mean the user is in crisis. The voice emotion model
+# cannot hear this (it only hears tone), so we check the words too.
+CRISIS_PHRASES = (
+    "kill myself", "killing myself", "end my life", "ending my life",
+    "suicide", "want to die", "wanna die", "hurt myself", "harm myself",
+    "self harm", "self-harm", "bad step", "no reason to live",
+    "better off dead", "don't want to live", "dont want to live",
+)
+
+CRISIS_HINT = (
+    "Safety: the user may be thinking about harming themselves. "
+    "Respond with care, ask if they are safe right now, and mention the "
+    "Tele-MANAS helpline 14416. Do not call it anger."
+)
+
+
+def is_crisis(transcript):
+    text = (transcript or "").lower()
+    return any(phrase in text for phrase in CRISIS_PHRASES)
 
 
 def build_messages(history, transcript, emotion=None, hint=None):
@@ -46,11 +71,14 @@ def build_messages(history, transcript, emotion=None, hint=None):
     emotion:    optional label from the voice emotion model (e.g. "angry")
     hint:       optional reply-style instruction for that emotion group
     The emotion is treated as possibly wrong; the words come first.
+    Crisis words always override the voice emotion hint.
     """
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(history)
 
-    if emotion:
+    if is_crisis(transcript):
+        user_content = f'User said: "{transcript}"\n{CRISIS_HINT}'
+    elif emotion:
         user_content = (
             f'User said: "{transcript}"\n'
             f'Voice tone detected (may be imperfect): "{emotion}"'
