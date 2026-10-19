@@ -19,3 +19,6 @@ data/features/
 # Trained model artifacts
 models/*.joblib
 models/tts/
+
+data/raw/ravdess/
+data/raw/tess/
