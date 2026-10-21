@@ -85,6 +85,96 @@ const getMeterText = (level) => {
   return 'loud';
 };
 
+// ---------------------------------------------------------
+// Week 4 Day 1: live waveform (user mic + Auralis voice)
+// ---------------------------------------------------------
+
+// Your waveform takes the colour of the emotion Auralis detected last
+const WAVE_EMOTION_COLORS = {
+  angry: '#f87171',
+  disgust: '#4ade80',
+  fear: '#c084fc',
+  happy: '#facc15',
+  neutral: '#2dd4bf',
+  sad: '#60a5fa',
+};
+
+// Auralis's waveform takes the colour of the voice style it speaks in
+const WAVE_VOICE_COLORS = {
+  calm: '#5eead4',
+  soft: '#93c5fd',
+  normal: '#a78bfa',
+};
+
+// RMS above this = that side is "talking" (bright + glow), below = dimmed
+const WAVE_ACTIVE_RMS = 0.015;
+// Speech is quiet in raw samples; scale it up so the shape is visible
+const WAVE_GAIN = 4;
+
+// Draws one waveform on a canvas. Returns the RMS level (0 when no audio).
+// Runs every animation frame, straight on the canvas (no React re-render).
+const drawWave = (canvas, wave, color) => {
+  if (!canvas) return 0;
+
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  if (width === 0 || height === 0) return 0;
+
+  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+  }
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const mid = height / 2;
+
+  // faint centre line, always visible
+  ctx.globalAlpha = 0.25;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  ctx.lineTo(width, mid);
+  ctx.stroke();
+
+  if (!wave) {
+    ctx.globalAlpha = 1;
+    return 0;
+  }
+
+  const { analyser, buffer } = wave;
+  analyser.getFloatTimeDomainData(buffer);
+
+  let sum = 0;
+  for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
+  const rms = Math.sqrt(sum / buffer.length);
+  const active = rms > WAVE_ACTIVE_RMS;
+
+  ctx.globalAlpha = active ? 1 : 0.4;
+  ctx.lineWidth = active ? 2.2 : 1.5;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = active ? 14 : 0;
+  ctx.beginPath();
+
+  const step = width / (buffer.length - 1);
+  for (let i = 0; i < buffer.length; i++) {
+    const value = Math.max(-1, Math.min(1, buffer[i] * WAVE_GAIN));
+    const y = mid - value * (mid - 4);
+    if (i === 0) ctx.moveTo(0, y);
+    else ctx.lineTo(i * step, y);
+  }
+  ctx.stroke();
+
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  return rms;
+};
+
 // Week 3 Day 2: emoji for each emotion label sent by the backend
 const EMOTION_EMOJI = {
   angry: '😠',
@@ -348,6 +438,54 @@ function App() {
   // Week 3 Day 1: timer that reads WebRTC stats for the incoming AI audio
   const statsTimerRef = useRef(null);
 
+  // Week 4 Day 1: live waveform. Analysers live in refs and the canvases are
+  // drawn every animation frame directly (no React state -> no re-renders).
+  const micWaveRef = useRef(null);      // { analyser, buffer } for your mic
+  const aiWaveRef = useRef(null);       // { analyser, buffer, source } for Auralis
+  const micCanvasRef = useRef(null);
+  const aiCanvasRef = useRef(null);
+  const micWavePanelRef = useRef(null);
+  const aiWavePanelRef = useRef(null);
+  const micWaveLabelRef = useRef(null);
+  const aiWaveLabelRef = useRef(null);
+  const userWaveColorRef = useRef(WAVE_EMOTION_COLORS.neutral);
+  const aiWaveColorRef = useRef(WAVE_VOICE_COLORS.normal);
+
+  // Week 4 Day 1: one animation loop draws both waveforms
+  useEffect(() => {
+    let raf = null;
+
+    const paint = (canvas, wave, color, panel, label, idleText) => {
+      const rms = drawWave(canvas, wave, color);
+      const active = rms > WAVE_ACTIVE_RMS;
+
+      if (panel) {
+        panel.classList.toggle('wave-active', active);
+        panel.style.setProperty('--wave-color', color);
+      }
+      if (label) {
+        const db = rms > 0 ? 20 * Math.log10(rms) : -100;
+        const text = !wave ? idleText : active ? `talking · ${db.toFixed(0)} dB` : 'quiet';
+        if (label.textContent !== text) label.textContent = text;
+      }
+    };
+
+    const tick = () => {
+      paint(
+        micCanvasRef.current, micWaveRef.current, userWaveColorRef.current,
+        micWavePanelRef.current, micWaveLabelRef.current, 'mic off'
+      );
+      paint(
+        aiCanvasRef.current, aiWaveRef.current, aiWaveColorRef.current,
+        aiWavePanelRef.current, aiWaveLabelRef.current, 'not connected'
+      );
+      raf = requestAnimationFrame(tick);
+    };
+
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   // Auto-scroll transcript to the newest line
   // Week 3 Day 6: ask the backend what it is running, every 15 s
   useEffect(() => {
@@ -410,6 +548,17 @@ function App() {
 
   const lastEmotion = emotions.length > 0 ? emotions[emotions.length - 1] : null;
   const lastEmotionView = getEmotionView(lastEmotion);
+
+  // Week 4 Day 1: waveform colours follow the last emotion / voice style
+  const lastVoiceStyle =
+    [...turns].reverse().find((t) => t.voice?.style)?.voice.style ?? 'normal';
+  const userWaveColor = WAVE_EMOTION_COLORS[lastEmotionView?.text] ?? WAVE_EMOTION_COLORS.neutral;
+  const aiWaveColor = WAVE_VOICE_COLORS[lastVoiceStyle] ?? WAVE_VOICE_COLORS.normal;
+
+  useEffect(() => {
+    userWaveColorRef.current = userWaveColor;
+    aiWaveColorRef.current = aiWaveColor;
+  }, [userWaveColor, aiWaveColor]);
 
   // Week 3 Day 5: emotion test mode scores
   const testTotal = testResults.length;
@@ -608,6 +757,9 @@ function App() {
       source.connect(analyser);
 
       audioCtxRef.current = ctx;
+
+      // Week 4 Day 1: the waveform reads the same analyser with its own buffer
+      micWaveRef.current = { analyser, buffer: new Float32Array(analyser.fftSize) };
 
       const buffer = new Float32Array(analyser.fftSize);
 
@@ -1239,6 +1391,28 @@ function App() {
           setError('Browser blocked AI audio. Click ENABLE AI AUDIO.');
         });
       }
+
+      // Week 4 Day 1: tap Auralis's voice for the waveform.
+      // The <audio> element still does the playing; the analyser is NOT
+      // connected to the speakers, so the voice is never played twice.
+      try {
+        let ctx = audioCtxRef.current;
+        if (!ctx || ctx.state === 'closed') {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          ctx = new AudioCtx();
+          audioCtxRef.current = ctx;
+        }
+        ctx.resume?.().catch(() => {});
+
+        aiWaveRef.current?.source?.disconnect();
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 1024;
+        source.connect(analyser);
+        aiWaveRef.current = { analyser, buffer: new Float32Array(analyser.fftSize), source };
+      } catch (err) {
+        console.warn('[WAVE] Could not tap AI audio for the waveform:', err);
+      }
     };
 
     try {
@@ -1345,6 +1519,11 @@ function App() {
   // ---------------------------------------------------------
 
   const stopMic = () => {
+    // Week 4 Day 1: waveforms go back to a flat line
+    aiWaveRef.current?.source?.disconnect();
+    aiWaveRef.current = null;
+    micWaveRef.current = null;
+
     stopMeter();
     stopStatsPolling();
 
@@ -1804,6 +1983,47 @@ function App() {
                 })
               )}
               <div ref={transcriptEndRef} />
+            </div>
+          </section>
+
+          {/* LIVE WAVEFORM (Week 4 Day 1) */}
+
+          <section className="card full">
+            <div className="card-title">
+              <h2>Live Waveform</h2>
+              <span>YOUR MIC · AURALIS VOICE · COLOUR = EMOTION / VOICE STYLE</span>
+            </div>
+
+            <div className="wave-grid">
+              <div
+                ref={micWavePanelRef}
+                className={`wave-panel wave-user ${vadState === 'speaking' ? 'wave-turn' : ''}`}
+                style={{ '--wave-color': userWaveColor }}
+              >
+                <div className="wave-head">
+                  <span className="wave-who">🎙 YOU</span>
+                  <span className="wave-tag">
+                    {lastEmotionView
+                      ? `${lastEmotionView.emoji} ${lastEmotionView.text}`
+                      : 'emotion —'}
+                  </span>
+                  <span ref={micWaveLabelRef} className="wave-level">mic off</span>
+                </div>
+                <canvas ref={micCanvasRef} className="wave-canvas" />
+              </div>
+
+              <div
+                ref={aiWavePanelRef}
+                className={`wave-panel wave-ai ${vadState === 'ai_speaking' ? 'wave-turn' : ''}`}
+                style={{ '--wave-color': aiWaveColor }}
+              >
+                <div className="wave-head">
+                  <span className="wave-who">🔊 AURALIS</span>
+                  <span className="wave-tag">{lastVoiceStyle} voice</span>
+                  <span ref={aiWaveLabelRef} className="wave-level">not connected</span>
+                </div>
+                <canvas ref={aiCanvasRef} className="wave-canvas" />
+              </div>
             </div>
           </section>
 

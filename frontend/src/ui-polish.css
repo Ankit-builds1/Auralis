@@ -1013,3 +1013,81 @@ body::after {
 .auralis-app .auralis-container .audit-verdict strong {
   color: var(--ui-accent);
 }
+/* ---------------------------------------------------------
+   Week 4 Day 1: live waveform (your mic + Auralis voice)
+   --------------------------------------------------------- */
+
+.auralis-app .auralis-container .wave-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.auralis-app .auralis-container .wave-panel {
+  --wave-color: #2dd4bf;
+  position: relative;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(8, 10, 30, 0.55);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
+  opacity: 0.85;
+}
+
+/* bright while sound is actually coming through */
+.auralis-app .auralis-container .wave-panel.wave-active {
+  border-color: var(--wave-color);
+  box-shadow: 0 0 18px -6px var(--wave-color);
+  opacity: 1;
+}
+
+/* whose turn it is (from the backend VAD state) */
+.auralis-app .auralis-container .wave-panel.wave-turn {
+  opacity: 1;
+}
+
+.auralis-app .auralis-container .wave-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+}
+
+.auralis-app .auralis-container .wave-who {
+  color: var(--wave-color);
+  font-weight: 700;
+}
+
+.auralis-app .auralis-container .wave-tag {
+  padding: 2px 8px;
+  border: 1px solid var(--wave-color);
+  border-radius: 999px;
+  color: var(--text-dim);
+}
+
+.auralis-app .auralis-container .wave-level {
+  margin-left: auto;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.auralis-app .auralis-container .wave-canvas {
+  display: block;
+  width: 100%;
+  height: 110px;
+}
+
+@media (max-width: 900px) {
+  .auralis-app .auralis-container .wave-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auralis-app .auralis-container .wave-panel {
+    transition: none;
+  }
+}
