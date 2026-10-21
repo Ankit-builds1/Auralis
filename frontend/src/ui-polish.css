@@ -805,3 +805,114 @@ body::after {
   background: #ffffff;
   opacity: 0.7;
 }
+/* =========================================================
+   Week 3 Day 5: voice + words badge, emotion test mode
+   ========================================================= */
+
+.auralis-app .auralis-container .bubble-badge.emotion-mix {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+}
+
+.auralis-app .auralis-container .bubble-badge.emotion-mix .mix-win {
+  color: var(--ui-text);
+  font-weight: 700;
+}
+
+.auralis-app .auralis-container .emotion-mix-sub {
+  margin-top: 4px;
+  color: var(--ui-text-muted);
+}
+
+.auralis-app .auralis-container .emotion-mix-sub strong {
+  color: var(--ui-accent);
+}
+
+.auralis-app .auralis-container .test-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.auralis-app .auralis-container .test-toggle,
+.auralis-app .auralis-container .test-target {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text-soft);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.auralis-app .auralis-container .test-toggle:hover,
+.auralis-app .auralis-container .test-target:hover {
+  background: var(--ui-surface-strong);
+  color: var(--ui-text);
+}
+
+.auralis-app .auralis-container .test-toggle.test-on {
+  border-color: var(--ui-good);
+  color: var(--ui-good);
+}
+
+.auralis-app .auralis-container .test-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auralis-app .auralis-container .test-target.test-target-active {
+  color: var(--ui-text);
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.25);
+  background: var(--ui-surface-strong);
+}
+
+.auralis-app .auralis-container .test-hint {
+  margin-bottom: 16px;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+.auralis-app .auralis-container .test-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 14px;
+}
+
+.auralis-app .auralis-container .test-matrix td,
+.auralis-app .auralis-container .test-matrix th {
+  text-align: center;
+}
+
+.auralis-app .auralis-container .test-matrix td:first-child,
+.auralis-app .auralis-container .test-matrix th:first-child {
+  text-align: left;
+}
+
+.auralis-app .auralis-container .test-matrix .cell-zero { opacity: 0.3; }
+.auralis-app .auralis-container .test-matrix .cell-hit  { color: var(--ui-good); font-weight: 700; }
+.auralis-app .auralis-container .test-matrix .cell-miss { color: var(--ui-bad); font-weight: 700; }
+
+/* test tables: show all rows, no inner scroll (sticky header overlapped rows) */
+.auralis-app .auralis-container .test-grid .audit-table-wrap {
+  max-height: none;
+  overflow: visible;
+}
+
+.auralis-app .auralis-container .test-grid .audit-table th {
+  position: static;
+}
+
+@media (max-width: 900px) {
+  .auralis-app .auralis-container .test-grid {
+    grid-template-columns: 1fr;
+  }
+}

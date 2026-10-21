@@ -98,7 +98,12 @@ const getEmotionView = (emotion) => {
   if (!emotion) return null;
 
   const pct = Math.round(emotion.confidence * 100);
-  const sure = emotion.confident && emotion.confidence >= EMOTION_SHOW_MIN;
+  // Week 3 Day 5: when the WORDS decided, the backend already required the
+  // text model to be >= 60% sure, and the fused number is naturally a bit
+  // lower (0.7 x text + 0.3 x voice) -> trust the backend's "confident" flag.
+  const sure =
+    emotion.confident &&
+    (emotion.source === 'words' || emotion.confidence >= EMOTION_SHOW_MIN);
 
   if (sure) {
     return {
@@ -120,6 +125,21 @@ const getEmotionView = (emotion) => {
     raw: emotion.label,
   };
 };
+
+// Week 3 Day 5: emotion test mode + voice/words fusion
+const EMOTION_LABELS = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad'];
+const EMOTION_GROUP = {
+  angry: 'upset', disgust: 'upset', fear: 'upset',
+  sad: 'low',
+  happy: 'okay', neutral: 'okay',
+};
+const TEST_RECENT_ROWS = 8;
+
+// "neutral 93%" style text for one side of the fusion
+const formatGuess = (label, confidence) =>
+  label ? `${label} ${Math.round((confidence ?? 0) * 100)}%` : '—';
+
+const pctOf = (hit, total) => (total > 0 ? `${Math.round((hit / total) * 100)}%` : '—');
 
 // Week 3 Day 3: voice style Piper used for the reply (from the emotion group)
 const VOICE_STYLE_ICON = {
@@ -187,6 +207,17 @@ function App() {
   // Week 3 Day 2: voice emotion per turn (WavLM-Large on the backend)
   // { label, confidence, group: 'upset'|'low'|'okay', confident, ms }
   const [emotions, setEmotions] = useState([]);
+
+  // Week 3 Day 5: emotion test mode
+  // testResults: { id, time, target, final, voice, words, source, transcript }
+  const [testMode, setTestMode] = useState(false);
+  const [testTarget, setTestTarget] = useState(null);
+  const [testResults, setTestResults] = useState([]);
+  // refs, because the DataChannel handler is created once at connect time
+  const testModeRef = useRef(false);
+  const testTargetRef = useRef(null);
+  const lastTranscriptRef = useRef('');
+  const testIdRef = useRef(0);
 
   // Week 3 Day 3: time to first audio (speech end -> Auralis starts talking)
   const [ttfas, setTtfas] = useState([]);
@@ -266,6 +297,23 @@ function App() {
   const lastEmotion = emotions.length > 0 ? emotions[emotions.length - 1] : null;
   const lastEmotionView = getEmotionView(lastEmotion);
 
+  // Week 3 Day 5: emotion test mode scores
+  const testTotal = testResults.length;
+  const testFinalHit = testResults.filter((r) => r.final === r.target).length;
+  const testGroupHit = testResults.filter(
+    (r) => EMOTION_GROUP[r.final] === EMOTION_GROUP[r.target]
+  ).length;
+  const testVoiceHit = testResults.filter((r) => r.voice === r.target).length;
+  const testWordsRows = testResults.filter((r) => r.words);
+  const testWordsHit = testWordsRows.filter((r) => r.words === r.target).length;
+  const testByWords = testResults.filter((r) => r.source === 'words').length;
+  const testMatrix = EMOTION_LABELS.map((target) =>
+    EMOTION_LABELS.map(
+      (pred) => testResults.filter((r) => r.target === target && r.final === pred).length
+    )
+  );
+  const testRecent = testResults.slice(-TEST_RECENT_ROWS).reverse();
+
   const lastTtfa = ttfas.length > 0 ? ttfas[ttfas.length - 1] : null;
   const avgTtfa = average(ttfas);
 
@@ -334,6 +382,32 @@ function App() {
   };
 
   // Update the turn the LLM is currently answering
+  // Called from the DataChannel handler for every emotion event.
+  // Reads refs (not state) because that handler is created once at connect time.
+  const recordTest = (emotion, shown) => {
+    const target = testTargetRef.current;
+    if (!testModeRef.current || !target) return;
+
+    testIdRef.current += 1;
+    const id = testIdRef.current;
+    const transcript = lastTranscriptRef.current;
+
+    setTestResults((previous) => [
+      ...previous,
+      {
+        id,
+        time: new Date().toLocaleTimeString(),
+        target,
+        final: shown,
+        voice: emotion.voiceLabel,
+        words: emotion.textLabel,
+        source: emotion.source ?? 'voice',
+        transcript,
+      },
+    ]);
+    addEvent(`Test: wanted ${target} → got ${shown} ${shown === target ? '✓' : '✗'}`);
+  };
+
   const updateCurrentTurn = (update) => {
     const id = currentTurnIdRef.current;
     if (!id) return;
@@ -662,6 +736,7 @@ function App() {
 
         addTurn(text, latencyMs);
         markSegmentTranscribed(text);
+        lastTranscriptRef.current = text;
 
         if (latencyMs !== null) {
           setLatencies((previous) => [...previous, latencyMs].slice(-20));
@@ -686,17 +761,31 @@ function App() {
           group: data.group || 'okay',
           confident: data.confident !== false,
           ms: typeof data.ms === 'number' ? Math.round(data.ms) : null,
+          // Week 3 Day 5: voice + words fusion (older backends don't send these)
+          source: data.source === 'words' ? 'words' : data.source === 'voice' ? 'voice' : null,
+          voiceLabel: typeof data.voice_label === 'string' ? data.voice_label : data.label,
+          voiceConfidence:
+            typeof data.voice_confidence === 'number' ? data.voice_confidence : data.confidence,
+          textLabel: typeof data.text_label === 'string' ? data.text_label : null,
+          textConfidence: typeof data.text_confidence === 'number' ? data.text_confidence : null,
+          textMs: typeof data.text_ms === 'number' ? Math.round(data.text_ms) : null,
         };
 
         const view = getEmotionView(emotion);
+        const by = emotion.source
+          ? ` · by ${emotion.source} (voice ${formatGuess(emotion.voiceLabel, emotion.voiceConfidence)}, words ${formatGuess(emotion.textLabel, emotion.textConfidence)})`
+          : '';
 
         setEmotions((previous) => [...previous, emotion].slice(-20));
         updateCurrentTurn(() => ({ emotion }));
         addEvent(
           view.sure
-            ? `Emotion: ${emotion.label} (${view.pct}%, ${emotion.group}, ${formatMs(emotion.ms)})`
-            : `Emotion: neutral — low confidence, raw guess ${emotion.label} ${view.pct}% (${formatMs(emotion.ms)})`
+            ? `Emotion: ${emotion.label} (${view.pct}%, ${emotion.group}, ${formatMs(emotion.ms)})${by}`
+            : `Emotion: neutral — low confidence, raw guess ${emotion.label} ${view.pct}% (${formatMs(emotion.ms)})${by}`
         );
+
+        // Week 3 Day 5: test mode -> score this turn against the chosen emotion
+        recordTest(emotion, view.text);
         return;
       }
 
@@ -1185,6 +1274,46 @@ function App() {
   };
 
   // ---------------------------------------------------------
+  // Week 3 Day 5: EMOTION TEST MODE
+  // ---------------------------------------------------------
+
+  const toggleTestMode = () => {
+    const next = !testModeRef.current;
+    testModeRef.current = next;
+    setTestMode(next);
+    addEvent(next ? 'Emotion test mode ON' : 'Emotion test mode OFF');
+  };
+
+  const chooseTestTarget = (label) => {
+    testTargetRef.current = label;
+    setTestTarget(label);
+    if (!testModeRef.current) {
+      testModeRef.current = true;
+      setTestMode(true);
+    }
+  };
+
+  const resetTests = () => setTestResults([]);
+
+  const exportTests = () => {
+    if (testResults.length === 0) return;
+    const header = ['time', 'target', 'final', 'voice', 'words', 'source', 'correct', 'transcript'];
+    const escape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = testResults.map((r) =>
+      [r.time, r.target, r.final, r.voice, r.words ?? '', r.source, r.final === r.target, r.transcript]
+        .map(escape)
+        .join(',')
+    );
+    const blob = new Blob([[header.join(','), ...rows].join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `auralis_emotion_test_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ---------------------------------------------------------
   // VAD DISPLAY
   // ---------------------------------------------------------
 
@@ -1360,8 +1489,15 @@ function App() {
                     ? lastEmotionView.sure
                       ? `${lastEmotionView.pct}% · ${lastEmotionView.group} · ${formatMs(lastEmotion.ms)}`
                       : `low confidence · guess ${lastEmotionView.raw} ${lastEmotionView.pct}% · ${formatMs(lastEmotion.ms)}`
-                    : 'voice tone · WavLM-Large'}
+                    : 'voice tone + words'}
                 </div>
+                {lastEmotion?.source && (
+                  <div className="metric-sub emotion-mix-sub">
+                    by <strong>{lastEmotion.source}</strong> · 🎙{' '}
+                    {formatGuess(lastEmotion.voiceLabel, lastEmotion.voiceConfidence)} · 💬{' '}
+                    {formatGuess(lastEmotion.textLabel, lastEmotion.textConfidence)}
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -1372,7 +1508,7 @@ function App() {
             <div className="card-title">
               <h2>Conversation</h2>
               <span>
-                WHISPER + WAVLM → LLAMA 3 → PIPER
+                WHISPER + WAVLM + TEXT → LLAMA 3 → PIPER
                 {turns.length > 0 && (
                   <button className="btn-link" onClick={clearHistory}>&nbsp;· CLEAR</button>
                 )}
@@ -1406,6 +1542,20 @@ function App() {
                             >
                               {ev.emoji} {ev.text}{' '}
                               {ev.sure ? `${ev.pct}%` : `(guess ${ev.raw} ${ev.pct}%)`}
+                            </span>
+                          )}
+                          {ev && turn.emotion.source && (
+                            <span
+                              className={`bubble-badge emotion-mix by-${turn.emotion.source}`}
+                              title={`decided by ${turn.emotion.source}`}
+                            >
+                              <span className={turn.emotion.source === 'voice' ? 'mix-win' : ''}>
+                                🎙 {formatGuess(turn.emotion.voiceLabel, turn.emotion.voiceConfidence)}
+                              </span>
+                              {' · '}
+                              <span className={turn.emotion.source === 'words' ? 'mix-win' : ''}>
+                                💬 {formatGuess(turn.emotion.textLabel, turn.emotion.textConfidence)}
+                              </span>
                             </span>
                           )}
                         </div>
@@ -1461,6 +1611,155 @@ function App() {
               )}
               <div ref={transcriptEndRef} />
             </div>
+          </section>
+
+          {/* EMOTION TEST MODE (Week 3 Day 5) */}
+
+          <section className="card full">
+            <div className="card-title">
+              <h2>Emotion Test Mode</h2>
+              <span>
+                PICK AN EMOTION → SAY IT → SEE WHO GOT IT RIGHT
+                {testTotal > 0 && (
+                  <>
+                    <button className="btn-link" onClick={exportTests}>&nbsp;· EXPORT CSV</button>
+                    <button className="btn-link" onClick={resetTests}>&nbsp;· RESET</button>
+                  </>
+                )}
+              </span>
+            </div>
+
+            <div className="test-controls">
+              <button
+                className={`test-toggle ${testMode ? 'test-on' : ''}`}
+                onClick={toggleTestMode}
+              >
+                {testMode ? '● TEST MODE ON' : '○ TEST MODE OFF'}
+              </button>
+              <div className="test-targets">
+                {EMOTION_LABELS.map((label) => (
+                  <button
+                    key={label}
+                    className={`test-target emotion-${EMOTION_GROUP[label]} ${
+                      testTarget === label ? 'test-target-active' : ''
+                    }`}
+                    onClick={() => chooseTestTarget(label)}
+                  >
+                    {EMOTION_EMOJI[label]} {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="test-hint">
+              {testMode && testTarget
+                ? `Now say something in a ${testTarget.toUpperCase()} way. Every turn is scored until you pick another emotion or turn test mode off.`
+                : 'Pick the emotion you are going to act, then speak. Neutral words test the voice; emotional words test the text model.'}
+            </div>
+
+            <div className="audit-summary">
+              <div className="metric">
+                <div className="metric-label">Final (shown)</div>
+                <div className="metric-value">{pctOf(testFinalHit, testTotal)}</div>
+                <div className="metric-sub">
+                  {testTotal > 0
+                    ? `${testFinalHit}/${testTotal} · 3-group ${pctOf(testGroupHit, testTotal)}`
+                    : 'what the app showed'}
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">🎙 Voice only</div>
+                <div className="metric-value">{pctOf(testVoiceHit, testTotal)}</div>
+                <div className="metric-sub">
+                  {testTotal > 0 ? `${testVoiceHit}/${testTotal} · WavLM tone` : 'WavLM tone'}
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">💬 Words only</div>
+                <div className="metric-value">{pctOf(testWordsHit, testWordsRows.length)}</div>
+                <div className="metric-sub">
+                  {testWordsRows.length > 0
+                    ? `${testWordsHit}/${testWordsRows.length} · text model`
+                    : 'needs the Day 5 backend'}
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Tests</div>
+                <div className="metric-value">{testTotal}</div>
+                <div className="metric-sub">
+                  {testTotal > 0 ? `${testByWords} decided by words` : 'none yet'}
+                </div>
+              </div>
+            </div>
+
+            {testTotal > 0 && (
+              <div className="test-grid">
+                <div className="audit-table-wrap">
+                  <table className="audit-table test-matrix">
+                    <thead>
+                      <tr>
+                        <th>said ↓ / shown →</th>
+                        {EMOTION_LABELS.map((label) => (
+                          <th key={label} title={label}>{label.slice(0, 3)}</th>
+                        ))}
+                        <th>acc</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {EMOTION_LABELS.map((target, i) => {
+                        const rowTotal = testMatrix[i].reduce((a, b) => a + b, 0);
+                        return (
+                          <tr key={target}>
+                            <td>{EMOTION_EMOJI[target]} {target}</td>
+                            {testMatrix[i].map((count, j) => (
+                              <td
+                                key={EMOTION_LABELS[j]}
+                                className={
+                                  count === 0 ? 'cell-zero' : i === j ? 'cell-hit' : 'cell-miss'
+                                }
+                              >
+                                {count}
+                              </td>
+                            ))}
+                            <td>{pctOf(testMatrix[i][i], rowTotal)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="audit-table-wrap">
+                  <table className="audit-table">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Said</th>
+                        <th>Shown</th>
+                        <th>Voice</th>
+                        <th>Words</th>
+                        <th>By</th>
+                        <th>Transcript</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {testRecent.map((r) => (
+                        <tr key={r.id}>
+                          <td>{r.time}</td>
+                          <td>{r.target}</td>
+                          <td className={r.final === r.target ? 'audit-ok' : 'audit-miss'}>
+                            {r.final} {r.final === r.target ? '✓' : '✗'}
+                          </td>
+                          <td className={r.voice === r.target ? 'audit-ok' : ''}>{r.voice}</td>
+                          <td className={r.words === r.target ? 'audit-ok' : ''}>{r.words ?? '—'}</td>
+                          <td>{r.source}</td>
+                          <td>{r.transcript}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* LATENCY BREAKDOWN (Week 3 Day 4) */}
