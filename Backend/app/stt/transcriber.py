@@ -1,3 +1,6 @@
+import glob
+import os
+import sys
 import threading
 import time
 
@@ -7,6 +10,48 @@ from faster_whisper import WhisperModel
 
 
 TARGET_SAMPLE_RATE = 16000
+
+# ---------------------------------------------------------------------------
+# Week 3 Day 6: Whisper settings from the environment / .env
+#   WHISPER_MODEL         base.en (default), small.en, ...
+#   WHISPER_DEVICE        auto (default) | cpu | cuda
+#                         auto = GPU if one is usable, otherwise CPU
+#   WHISPER_COMPUTE_TYPE  default float16 on GPU, int8 on CPU
+#   WHISPER_BEAM_SIZE     5 (default, most accurate) | 1 (fastest, greedy)
+# If the GPU cannot be used (no CUDA libraries, out of memory, ...), the
+# server says why and falls back to CPU instead of crashing.
+# ---------------------------------------------------------------------------
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base.en")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "auto").strip().lower()
+WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "").strip().lower()
+WHISPER_BEAM_SIZE = int(os.getenv("WHISPER_BEAM_SIZE", "5"))
+
+
+def _add_cuda_dll_dirs():
+    """
+    Windows: faster-whisper needs cuBLAS + cuDNN DLLs for the GPU. The
+    easiest way to get them is `python -m pip install nvidia-cublas-cu12
+    nvidia-cudnn-cu12==9.*`, which puts them in site-packages/nvidia/*/bin.
+    Windows does not search there by default, so add those folders.
+    """
+    if sys.platform != "win32":
+        return
+    for base in sys.path:
+        for folder in glob.glob(os.path.join(base, "nvidia", "*", "bin")):
+            try:
+                os.add_dll_directory(folder)
+            except (OSError, AttributeError):
+                pass
+            if folder not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = folder + os.pathsep + os.environ.get("PATH", "")
+
+
+def _gpu_available():
+    try:
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
 
 # Words Whisper should expect. Helps it spell names and project terms
 # correctly ("Ankit Dash" instead of "Ankida", "BTech" instead of "BTEK").
@@ -55,24 +100,40 @@ class SpeechToText:
 
     def __init__(
         self,
-        model_size="base.en",
-        device="cpu",
-        compute_type="int8",
-        beam_size=5,
+        model_size=None,
+        device=None,
+        compute_type=None,
+        beam_size=None,
         initial_prompt=DEFAULT_INITIAL_PROMPT,
     ):
-        print(
-            f"[STT] Loading Whisper model "
-            f"(model={model_size}, device={device}, "
-            f"compute_type={compute_type}, beam_size={beam_size})"
-        )
+        model_size = model_size or WHISPER_MODEL
+        device = (device or WHISPER_DEVICE).lower()
+        beam_size = beam_size or WHISPER_BEAM_SIZE
+        self.fallback_reason = None
 
-        self.model = WhisperModel(
-            model_size,
-            device=device,
-            compute_type=compute_type,
-        )
+        if device in ("auto", "cuda"):
+            _add_cuda_dll_dirs()
+        if device == "auto":
+            device = "cuda" if _gpu_available() else "cpu"
 
+        self.model = None
+        if device == "cuda":
+            gpu_type = compute_type or WHISPER_COMPUTE_TYPE or "float16"
+            try:
+                self._load(model_size, "cuda", gpu_type, beam_size)
+                self._self_test()     # cuBLAS / cuDNN errors show up here
+            except Exception as exc:
+                self.fallback_reason = f"{type(exc).__name__}: {exc}"
+                print(f"[STT] GPU not usable ({self.fallback_reason}) -> falling back to CPU")
+                self.model = None
+
+        if self.model is None:
+            cpu_type = (compute_type or WHISPER_COMPUTE_TYPE or "int8")
+            if cpu_type == "float16":       # float16 is GPU-only
+                cpu_type = "int8"
+            self._load(model_size, "cpu", cpu_type, beam_size)
+
+        self.model_size = model_size
         self.beam_size = beam_size
         self.initial_prompt = initial_prompt
 
@@ -80,7 +141,35 @@ class SpeechToText:
         # close together, and both run in background threads.
         self._lock = threading.Lock()
 
-        print("[STT] Whisper model loaded")
+        print(f"[STT] Whisper model loaded on {self.device.upper()}")
+
+    def _load(self, model_size, device, compute_type, beam_size):
+        print(
+            f"[STT] Loading Whisper model "
+            f"(model={model_size}, device={device}, "
+            f"compute_type={compute_type}, beam_size={beam_size})"
+        )
+        self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
+        self.device = device
+        self.compute_type = compute_type
+
+    def _self_test(self):
+        """Tiny transcription: makes missing GPU libraries fail now, not mid-call."""
+        segments, _ = self.model.transcribe(
+            np.zeros(TARGET_SAMPLE_RATE // 2, dtype=np.float32),
+            language="en", beam_size=1, vad_filter=False,
+        )
+        list(segments)
+
+    def info(self):
+        """Settings shown on /health and in the frontend chips (Week 3 Day 6)."""
+        return {
+            "model": self.model_size,
+            "device": self.device,
+            "compute_type": self.compute_type,
+            "beam_size": self.beam_size,
+            "gpu_fallback": self.fallback_reason,
+        }
 
     # ==========================================================
     # Warm-up
