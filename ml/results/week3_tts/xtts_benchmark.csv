@@ -1,0 +1,16 @@
+style,reference_emotion,sentence,first_chunk_ms,total_ms,audio_ms,rtf,file,text
+calm,neutral,1,631,3335,4597,0.73,neutral_1.wav,"I'm here with you. Take a slow breath, we will sort this out together."
+calm,neutral,2,568,3267,4917,0.66,neutral_2.wav,That sounds really hard. Do you want to tell me what happened?
+calm,neutral,3,518,2094,3339,0.63,neutral_3.wav,"That's wonderful news, I'm so happy for you!"
+soft,sad,1,558,3125,4640,0.67,sad_1.wav,"I'm here with you. Take a slow breath, we will sort this out together."
+soft,sad,2,511,3163,4875,0.65,sad_2.wav,That sounds really hard. Do you want to tell me what happened?
+soft,sad,3,486,2028,3243,0.63,sad_3.wav,"That's wonderful news, I'm so happy for you!"
+panicked,fear,1,512,2525,3893,0.65,fear_1.wav,"I'm here with you. Take a slow breath, we will sort this out together."
+panicked,fear,2,503,1925,2965,0.65,fear_2.wav,That sounds really hard. Do you want to tell me what happened?
+panicked,fear,3,492,1395,2507,0.56,fear_3.wav,"That's wonderful news, I'm so happy for you!"
+angry,angry,1,490,3235,5152,0.63,angry_1.wav,"I'm here with you. Take a slow breath, we will sort this out together."
+angry,angry,2,544,3275,5333,0.61,angry_2.wav,That sounds really hard. Do you want to tell me what happened?
+angry,angry,3,430,2226,3808,0.58,angry_3.wav,"That's wonderful news, I'm so happy for you!"
+happy,happy,1,622,3215,4736,0.68,happy_1.wav,"I'm here with you. Take a slow breath, we will sort this out together."
+happy,happy,2,594,2155,3104,0.69,happy_2.wav,That sounds really hard. Do you want to tell me what happened?
+happy,happy,3,471,1831,2965,0.62,happy_3.wav,"That's wonderful news, I'm so happy for you!"

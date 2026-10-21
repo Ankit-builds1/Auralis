@@ -22,3 +22,5 @@ models/tts/
 
 data/raw/ravdess/
 data/raw/tess/
+
+results/week3_tts/xtts/
