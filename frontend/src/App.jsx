@@ -385,6 +385,18 @@ function App() {
   const [ttfas, setTtfas] = useState([]);
   const [echoCount, setEchoCount] = useState(0);
 
+  // Week 4 Day 2: interruptions (barge-in from the backend, or STOP button)
+  // { id, reason: 'barge_in'|'manual', stopMs, spokenMs }
+  const [interruptions, setInterruptions] = useState([]);
+  // true while Auralis's voice is cut locally (until its next reply starts)
+  const aiCutRef = useRef(false);
+  const aiUnmuteTimerRef = useRef(null);
+  // id of the turn whose reply was cut (its late tokens / audio stay silent)
+  const interruptedTurnIdRef = useRef(null);
+  // true while Auralis is cut: UI shows STOPPED even if the backend keeps
+  // sending the rest of the old reply (backend without barge-in)
+  const [aiStopped, setAiStopped] = useState(false);
+
   // Week 3 Day 6: backend health (models / devices) + saved latency runs
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState(null);
@@ -475,9 +487,11 @@ function App() {
         micCanvasRef.current, micWaveRef.current, userWaveColorRef.current,
         micWavePanelRef.current, micWaveLabelRef.current, 'mic off'
       );
+      // Week 4 Day 2: muted Auralis = flat line, even if old audio still arrives
+      const aiCut = aiCutRef.current && aiWaveRef.current;
       paint(
-        aiCanvasRef.current, aiWaveRef.current, aiWaveColorRef.current,
-        aiWavePanelRef.current, aiWaveLabelRef.current, 'not connected'
+        aiCanvasRef.current, aiCut ? null : aiWaveRef.current, aiWaveColorRef.current,
+        aiWavePanelRef.current, aiWaveLabelRef.current, aiCut ? 'stopped · muted' : 'not connected'
       );
       raf = requestAnimationFrame(tick);
     };
@@ -576,6 +590,17 @@ function App() {
     )
   );
   const testRecent = testResults.slice(-TEST_RECENT_ROWS).reverse();
+
+  // Week 4 Day 2: interruption stats
+  const interruptStopTimes = interruptions
+    .map((i) => i.stopMs)
+    .filter((ms) => typeof ms === 'number');
+  const avgInterruptStop = average(interruptStopTimes);
+  const bargeInCount = interruptions.filter((i) => i.reason === 'barge_in').length;
+  const manualStopCount = interruptions.length - bargeInCount;
+  const aiCanBeStopped =
+    vadState === 'ai_speaking' ||
+    turns.some((t) => t.aiState === 'streaming' || t.voice?.speaking);
 
   const lastTtfa = ttfas.length > 0 ? ttfas[ttfas.length - 1] : null;
   const avgTtfa = average(ttfas);
@@ -688,6 +713,79 @@ function App() {
 
     setTurns((previous) =>
       previous.map((t) => (t.id === id ? { ...t, ...update(t) } : t))
+    );
+  };
+
+  // ---------------------------------------------------------
+  // Week 4 Day 2: INTERRUPTION (barge-in) helpers
+  // ---------------------------------------------------------
+
+  // Silence Auralis in the browser right away. The backend stops sending
+  // audio too, but a few hundred ms are already buffered on the way.
+  const cutAiVoice = () => {
+    aiCutRef.current = true;
+    setAiStopped(true);
+    if (aiUnmuteTimerRef.current) {
+      clearTimeout(aiUnmuteTimerRef.current);
+      aiUnmuteTimerRef.current = null;
+    }
+    if (audioRef.current) audioRef.current.muted = true;
+
+    // short "cut" flash on the AURALIS waveform
+    const panel = aiWavePanelRef.current;
+    if (panel) {
+      panel.classList.remove('wave-cut');
+      void panel.offsetWidth; // restart the CSS animation
+      panel.classList.add('wave-cut');
+    }
+  };
+
+  // Let Auralis be heard again (new reply starting, or old one fully drained)
+  const restoreAiVoice = (delayMs = 0) => {
+    if (aiUnmuteTimerRef.current) clearTimeout(aiUnmuteTimerRef.current);
+    aiUnmuteTimerRef.current = setTimeout(() => {
+      aiCutRef.current = false;
+      aiUnmuteTimerRef.current = null;
+      setAiStopped(false);
+      if (audioRef.current) audioRef.current.muted = false;
+    }, delayMs);
+  };
+
+  // Mark the current reply as cut off and record the interruption
+  const markInterrupted = (reason, stopMs, spokenMs) => {
+    updateCurrentTurn((t) => ({
+      aiState: t.aiState === 'waiting' || t.aiState === 'error' ? t.aiState : 'interrupted',
+      interrupt: { reason, stopMs },
+      voice: t.voice ? { ...t.voice, speaking: false } : t.voice,
+    }));
+    setInterruptions((previous) =>
+      [...previous, { id: `${Date.now()}-${previous.length}`, reason, stopMs, spokenMs }].slice(-50)
+    );
+  };
+
+  // STOP AURALIS button: ask the backend to stop, and cut the voice locally
+  // at once (works even with a backend that does not support it yet).
+  const stopAuralis = () => {
+    cutAiVoice();
+
+    const channel = dataChannelRef.current;
+    let sent = false;
+    if (channel && channel.readyState === 'open') {
+      try {
+        channel.send(JSON.stringify({ type: 'interrupt', reason: 'manual' }));
+        sent = true;
+      } catch (err) {
+        console.warn('[INTERRUPT] Could not send interrupt:', err);
+      }
+    }
+
+    interruptedTurnIdRef.current = currentTurnIdRef.current;
+    markInterrupted('manual', null, null);
+    setStatus('Auralis stopped');
+    addEvent(
+      sent
+        ? 'You stopped Auralis (interrupt sent to backend)'
+        : 'You stopped Auralis (voice muted here; not connected)'
     );
   };
 
@@ -1080,13 +1178,16 @@ function App() {
         if (data.first && typeof data.ttft_ms === 'number') {
           const ttft = Math.round(data.ttft_ms);
           setTtfts((previous) => [...previous, ttft].slice(-20));
-          updateCurrentTurn((t) => ({
-            aiState: 'streaming',
-            ttftMs: ttft,
-            aiText: t.aiText + token,
-          }));
+          updateCurrentTurn((t) =>
+            t.aiState === 'interrupted'
+              ? { ttftMs: ttft }
+              : { aiState: 'streaming', ttftMs: ttft, aiText: t.aiText + token }
+          );
         } else {
-          updateCurrentTurn((t) => ({ aiState: 'streaming', aiText: t.aiText + token }));
+          // Week 4 Day 2: a cut-off reply stops growing
+          updateCurrentTurn((t) =>
+            t.aiState === 'interrupted' ? {} : { aiState: 'streaming', aiText: t.aiText + token }
+          );
         }
         return;
       }
@@ -1099,13 +1200,19 @@ function App() {
           setTotals((previous) => [...previous, total].slice(-20));
         }
 
-        updateCurrentTurn((t) => ({
-          aiState: 'done',
-          // Use the final text from the backend if it sent one
-          aiText: typeof data.text === 'string' && data.text.trim() ? data.text.trim() : t.aiText,
-          ttftMs: t.ttftMs ?? ttft,
-          totalMs: total,
-        }));
+        updateCurrentTurn((t) =>
+          t.aiState === 'interrupted'
+            ? // Week 4 Day 2: keep only what was shown before the cut
+              { ttftMs: t.ttftMs ?? ttft, totalMs: total }
+            : {
+                aiState: 'done',
+                // Use the final text from the backend if it sent one
+                aiText:
+                  typeof data.text === 'string' && data.text.trim() ? data.text.trim() : t.aiText,
+                ttftMs: t.ttftMs ?? ttft,
+                totalMs: total,
+              }
+        );
 
         addEvent(
           `AI reply done (TTFT ${formatMs(ttft)}, total ${formatMs(total)}, ${data.tokens ?? '?'} tokens)`
@@ -1124,9 +1231,17 @@ function App() {
           setTtfas((previous) => [...previous, ttfa].slice(-20));
         }
 
-        updateCurrentTurn(() => ({
-          voice: { style, ttfaMs: ttfa, speaking: true, sentences: 0, audioMs: 0 },
-        }));
+        // Week 4 Day 2: a reply that was already cut stays silent;
+        // a NEW reply makes Auralis audible again.
+        const cutTurn = interruptedTurnIdRef.current === currentTurnIdRef.current;
+        if (aiCutRef.current && !cutTurn) restoreAiVoice(0);
+
+        updateCurrentTurn((t) =>
+          t.aiState === 'interrupted'
+            ? { voice: { style, ttfaMs: ttfa, speaking: false, sentences: 0, audioMs: 0 } }
+            : { voice: { style, ttfaMs: ttfa, speaking: true, sentences: 0, audioMs: 0 } }
+        );
+        if (cutTurn) return;
         setStatus('Auralis is speaking...');
         addEvent(`AI voice started (TTFA ${formatMs(ttfa)}, ${style} voice)`);
         return;
@@ -1135,7 +1250,7 @@ function App() {
       case 'tts_sentence':
         updateCurrentTurn((t) => ({
           voice: {
-            ...(t.voice || { style: 'normal', ttfaMs: null, speaking: true }),
+            ...(t.voice || { style: 'normal', ttfaMs: null, speaking: t.aiState !== 'interrupted' }),
             sentences: data.index ?? (t.voice?.sentences ?? 0) + 1,
             audioMs: (t.voice?.audioMs ?? 0) + (data.audio_ms ?? 0),
           },
@@ -1186,6 +1301,40 @@ function App() {
         console.error('[Backend] TTS error:', data);
         addEvent(`TTS error: ${data.error}`);
         return;
+
+      // -------- Week 4 Day 2: barge-in (user spoke over Auralis) --------
+      // Backend stopped the LLM + TTS for the current reply.
+      // Fields (all optional): reason 'barge_in'|'manual', stop_ms (user
+      // speech detected -> TTS stopped), spoken_ms (AI audio already sent)
+
+      case 'interrupted': {
+        const reason = data.reason === 'manual' ? 'manual' : 'barge_in';
+        const stopMs = typeof data.stop_ms === 'number' ? Math.round(data.stop_ms) : null;
+        const spokenMs = typeof data.spoken_ms === 'number' ? Math.round(data.spoken_ms) : null;
+
+        cutAiVoice();
+
+        // The STOP button already recorded this one -> just add the timing
+        if (reason === 'manual' && interruptedTurnIdRef.current === currentTurnIdRef.current) {
+          updateCurrentTurn((t) => ({ interrupt: { ...(t.interrupt || {}), reason, stopMs } }));
+          setInterruptions((previous) => {
+            if (previous.length === 0) return previous;
+            const last = { ...previous[previous.length - 1], stopMs, spokenMs };
+            return [...previous.slice(0, -1), last];
+          });
+        } else {
+          interruptedTurnIdRef.current = currentTurnIdRef.current;
+          markInterrupted(reason, stopMs, spokenMs);
+        }
+
+        setStatus(reason === 'manual' ? 'Auralis stopped' : 'Interrupted, listening...');
+        addEvent(
+          `Interrupted (${reason === 'manual' ? 'STOP button' : 'you spoke'}` +
+          `${stopMs !== null ? `, voice stopped in ${stopMs} ms` : ''}` +
+          `${spokenMs !== null ? `, after ${formatMs(spokenMs)} of speech` : ''})`
+        );
+        return;
+      }
 
       case 'echo_ignored':
         setEchoCount((count) => count + 1);
@@ -1541,7 +1690,13 @@ function App() {
 
     if (audioRef.current) {
       audioRef.current.srcObject = null;
+      audioRef.current.muted = false;
     }
+    if (aiUnmuteTimerRef.current) clearTimeout(aiUnmuteTimerRef.current);
+    aiUnmuteTimerRef.current = null;
+    aiCutRef.current = false;
+    interruptedTurnIdRef.current = null;
+    setAiStopped(false);
 
     streamRef.current = null;
     pcRef.current = null;
@@ -1573,6 +1728,7 @@ function App() {
     setEmotions([]);
     setTtfas([]);
     setEchoCount(0);
+    setInterruptions([]);
     setTurnMetrics([]);
     currentTurnIdRef.current = null;
   };
@@ -1669,11 +1825,18 @@ function App() {
   // VAD DISPLAY
   // ---------------------------------------------------------
 
+  // Week 4 Day 2: Auralis was stopped while the backend still reports
+  // ai_speaking (old backend finishing the cut reply silently)
+  const aiStoppedNow = aiStopped && vadState === 'ai_speaking';
+  const vadView = aiStoppedNow ? 'ai_stopped' : vadState;
+
   const getVadIcon = () =>
-    ({ speaking: '🗣️', listening: '🎧', processing: '⚙️', ai_speaking: '🔊' }[vadState] || '◉');
+    aiStoppedNow
+      ? '✋'
+      : ({ speaking: '🗣️', listening: '🎧', processing: '⚙️', ai_speaking: '🔊' }[vadState] || '◉');
 
   const getVadLabel = () =>
-    ({
+    aiStoppedNow ? 'AURALIS STOPPED' : ({
       speaking: 'SPEAKING',
       listening: 'LISTENING',
       processing: 'PROCESSING',
@@ -1761,8 +1924,12 @@ function App() {
               </div>
               <div className="metric">
                 <div className="metric-label">AI voice</div>
-                <div className={`metric-value ${vadState === 'ai_speaking' ? 'latency-good' : ''}`}>
-                  {vadState === 'ai_speaking' ? 'speaking' : 'quiet'}
+                <div
+                  className={`metric-value ${
+                    aiStoppedNow ? 'latency-warn' : vadState === 'ai_speaking' ? 'latency-good' : ''
+                  }`}
+                >
+                  {aiStoppedNow ? 'stopped' : vadState === 'ai_speaking' ? 'speaking' : 'quiet'}
                 </div>
               </div>
               <div className="metric">
@@ -1805,7 +1972,7 @@ function App() {
               <span>VAD ENGINE</span>
             </div>
 
-            <div className={`vad-box vad-${vadState}`}>
+            <div className={`vad-box vad-${vadView}`}>
               <div className="vad-state">
                 <div className="vad-icon">{getVadIcon()}</div>
                 <div className="vad-name">{getVadLabel()}</div>
@@ -1966,6 +2133,14 @@ function App() {
                               TTFA {turn.voice.ttfaMs} ms
                             </span>
                           )}
+                          {turn.interrupt && (
+                            <span className="bubble-badge interrupt-badge">
+                              ✋ {turn.interrupt.reason === 'manual' ? 'stopped' : 'interrupted'}
+                              {turn.interrupt.stopMs !== null && turn.interrupt.stopMs !== undefined
+                                ? ` · ${turn.interrupt.stopMs} ms`
+                                : ''}
+                            </span>
+                          )}
                         </div>
                         <div className="bubble-text">
                           {turn.aiState === 'error' && `⚠ ${turn.error}`}
@@ -1975,6 +2150,12 @@ function App() {
                             </span>
                           )}
                           {(turn.aiState === 'streaming' || turn.aiState === 'done') && turn.aiText}
+                          {turn.aiState === 'interrupted' && (
+                            <>
+                              {turn.aiText}
+                              <span className="cut-mark"> — cut off</span>
+                            </>
+                          )}
                           {turn.aiState === 'streaming' && <span className="cursor">▍</span>}
                         </div>
                       </div>
@@ -1991,7 +2172,9 @@ function App() {
           <section className="card full">
             <div className="card-title">
               <h2>Live Waveform</h2>
-              <span>YOUR MIC · AURALIS VOICE · COLOUR = EMOTION / VOICE STYLE</span>
+              <span>
+                YOUR MIC · AURALIS VOICE · SPEAK OVER AURALIS TO INTERRUPT
+              </span>
             </div>
 
             <div className="wave-grid">
@@ -2023,6 +2206,33 @@ function App() {
                   <span ref={aiWaveLabelRef} className="wave-level">not connected</span>
                 </div>
                 <canvas ref={aiCanvasRef} className="wave-canvas" />
+                <span className="wave-cut-label">✋ CUT</span>
+              </div>
+            </div>
+
+            {/* Week 4 Day 2: interruption controls + stats */}
+            <div className="interrupt-bar">
+              <button
+                className="btn btn-stop-ai"
+                onClick={stopAuralis}
+                disabled={!aiCanBeStopped}
+                title="Stop Auralis mid-sentence (same as talking over it)"
+              >
+                ✋ STOP AURALIS
+              </button>
+              <div className="interrupt-stats">
+                <span>
+                  interruptions <strong>{interruptions.length}</strong>
+                </span>
+                <span>
+                  by voice <strong>{bargeInCount}</strong> · by button <strong>{manualStopCount}</strong>
+                </span>
+                <span>
+                  avg stop{' '}
+                  <strong className={getLatencyClass(avgInterruptStop)}>
+                    {formatMs(avgInterruptStop)}
+                  </strong>
+                </span>
               </div>
             </div>
           </section>

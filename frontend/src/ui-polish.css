@@ -1091,3 +1091,114 @@ body::after {
     transition: none;
   }
 }
+/* ---------------------------------------------------------
+   Week 4 Day 2: interruption (barge-in) UI
+   --------------------------------------------------------- */
+
+/* reply that was cut off mid-sentence */
+.auralis-app .auralis-container .bubble-ai.ai-interrupted {
+  background: rgba(251, 191, 36, 0.07);
+  border-color: rgba(251, 191, 36, 0.38);
+  border-style: dashed;
+}
+
+.auralis-app .auralis-container .cut-mark {
+  color: #fbbf24;
+  font-style: italic;
+  font-size: 0.9em;
+}
+
+.auralis-app .auralis-container .interrupt-badge {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(251, 191, 36, 0.10);
+}
+
+/* "CUT" flash on the AURALIS waveform when it gets interrupted */
+.auralis-app .auralis-container .wave-cut-label {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.18);
+  border: 1px solid rgba(251, 191, 36, 0.6);
+  color: #fbbf24;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.auralis-app .auralis-container .wave-panel.wave-cut {
+  animation: wave-cut-flash 1.2s ease-out;
+}
+
+.auralis-app .auralis-container .wave-panel.wave-cut .wave-cut-label {
+  animation: wave-cut-label 1.2s ease-out;
+}
+
+@keyframes wave-cut-flash {
+  0% { border-color: #fbbf24; box-shadow: 0 0 22px -4px #fbbf24; }
+  100% { box-shadow: none; }
+}
+
+@keyframes wave-cut-label {
+  0%, 60% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* STOP AURALIS button + interruption stats */
+.auralis-app .auralis-container .interrupt-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+  margin-top: 14px;
+}
+
+.auralis-app .auralis-container .btn-stop-ai {
+  flex: 0 0 auto;
+  width: auto;
+  padding-left: 22px;
+  padding-right: 22px;
+  border-color: rgba(251, 191, 36, 0.55);
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.auralis-app .auralis-container .btn-stop-ai:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.auralis-app .auralis-container .interrupt-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.auralis-app .auralis-container .interrupt-stats strong {
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auralis-app .auralis-container .wave-panel.wave-cut,
+  .auralis-app .auralis-container .wave-panel.wave-cut .wave-cut-label {
+    animation: none;
+  }
+}
+
+/* Week 4 Day 2: VAD box while Auralis is stopped (old reply still draining) */
+.auralis-app .auralis-container .vad-box.vad-ai_stopped {
+  border-color: rgba(251, 191, 36, 0.55);
+  box-shadow: 0 0 22px -8px rgba(251, 191, 36, 0.6);
+}
+
+.auralis-app .auralis-container .vad-box.vad-ai_stopped .vad-name {
+  color: #fbbf24;
+}
