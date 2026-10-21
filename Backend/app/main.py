@@ -1,11 +1,13 @@
-﻿import asyncio
+﻿
+
+import asyncio
 
 from aiohttp import web
 import aiohttp_cors
 
 from app.config.settings import HOST, PORT
 from app.llm import ollama_client
-from app.ml_clients import emotion_engine
+from app.ml_clients import emotion_engine, text_emotion
 from app.stt.engine import load_and_warmup
 from app.tts import engine as tts_engine
 from app.webrtc.server import offer
@@ -16,6 +18,7 @@ async def health(request):
         "status": "ok",
         "service": "auralis-backend",
         "emotion": emotion_engine.is_ready(),
+        "text_emotion": text_emotion.is_ready(),
         "tts": tts_engine.is_ready(),
     })
 
@@ -30,6 +33,9 @@ async def on_startup(app):
 
     print("[STARTUP] Loading emotion model (WavLM-Large)...")
     await asyncio.to_thread(emotion_engine.load_and_warmup)
+
+    print("[STARTUP] Loading text emotion model (DistilRoBERTa)...")
+    await asyncio.to_thread(text_emotion.load_and_warmup)
 
     print("[STARTUP] Loading voice (Piper TTS)...")
     await asyncio.to_thread(tts_engine.load_and_warmup)

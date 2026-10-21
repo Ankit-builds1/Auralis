@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.audio.processor import AudioProcessor
 from app.llm import ollama_client
-from app.ml_clients import emotion_engine
+from app.ml_clients import emotion_engine, text_emotion
 from app.stt.engine import get_stt
 from app.tts import engine as tts_engine
 
@@ -31,7 +31,8 @@ ECHO_TAIL_S = 0.4
 LATENCY_LOG = os.getenv("LATENCY_LOG", "1") == "1"
 LATENCY_LOG_PATH = Path(__file__).resolve().parents[2] / "logs" / "latency.csv"
 LATENCY_FIELDS = [
-    "time", "transcript", "emotion", "voice",
+    "time", "transcript", "emotion", "voice_label", "text_label", "source",
+    "voice", "text_ms",
     "stt_ms", "emotion_ms", "ttft_ms", "first_piece_ms", "ttfa_ms",
     "first_synth_ms", "total_ms", "audio_ms", "pieces", "tokens",
 ]
@@ -69,7 +70,11 @@ class IncomingAudioTrack:
         audio_frame   ~50/s   frame info for the dashboard (+ echo flag)
         vad           speaking / processing / ai_speaking / idle
         transcript    {text, stt_ms}
-        emotion       {label, confidence, group, confident, ms, ready_ms}
+        emotion       {label, confidence, group, confident, ms, ready_ms,
+                       source, voice_label, voice_confidence,
+                       text_label, text_confidence, text_ms}
+                      label/confidence/group = FINAL (voice + words fused,
+                      Week 3 Day 5); source = "voice" or "words" (who decided)
         llm_start     reply is starting
         llm_token     {text, first, ttft_ms (first token only)}
         llm_done      {text, ttft_ms, total_ms, tokens}
@@ -321,6 +326,51 @@ class IncomingAudioTrack:
             print(f"[EMOTION ERROR] {type(exc).__name__}: {exc}")
             return None
 
+    def _fuse_emotion(self, transcript, emotion, speech_end_time):
+        """
+        Week 3 Day 5: combine the voice emotion with the words.
+        The words decide only when the text model is clearly sure of a
+        non-neutral emotion; otherwise the voice result is kept.
+        """
+        emotion["voice_label"] = emotion["label"]
+        emotion["voice_confidence"] = emotion["confidence"]
+        emotion["text_label"] = None
+        emotion["text_confidence"] = None
+        emotion["text_ms"] = None
+        emotion["source"] = "voice"
+
+        try:
+            text = text_emotion.predict(transcript)
+        except Exception as exc:
+            print(f"[TEXT ERROR] {type(exc).__name__}: {exc}")
+            text = None
+
+        if text is None or not emotion.get("probs"):
+            return emotion
+
+        label, confidence, source = text_emotion.fuse(emotion["probs"], text["probs"])
+
+        if source == "words":
+            confident = True          # text model was >= 0.6 sure
+        else:
+            confident = emotion["confident"]   # same voice gate as before
+
+        group = emotion_engine.GROUPS.get(label, "okay") if confident else "okay"
+
+        emotion.update(
+            label=label,
+            confidence=confidence,
+            confident=confident,
+            group=group,
+            hint=emotion_engine.LLM_HINTS[group],
+            source=source,
+            text_label=text["label"],
+            text_confidence=text["confidence"],
+            text_ms=text["ms"],
+            ready_ms=round((time.perf_counter() - speech_end_time) * 1000),
+        )
+        return emotion
+
     async def _handle_turn(self, segment, speech_end_time):
         async with self.turn_lock:
             try:
@@ -338,10 +388,17 @@ class IncomingAudioTrack:
                 self.send_event({"type": "transcript", "text": transcript, "stt_ms": stt_ms})
 
                 if emotion is not None:
+                    # ---- Week 3 Day 5: voice + words ----
+                    emotion = await asyncio.to_thread(
+                        self._fuse_emotion, transcript, emotion, speech_end_time
+                    )
+                    words = (f"{emotion['text_label']} ({emotion['text_confidence']:.2f}, "
+                             f"{emotion['text_ms']} ms)" if emotion["text_label"] else "-")
                     print(
                         f"[EMOTION] {emotion['label']} ({emotion['confidence']:.2f}) "
-                        f"-> {emotion['group']} | model {emotion['ms']} ms, "
-                        f"ready {emotion['ready_ms']} ms after speech end"
+                        f"-> {emotion['group']} | by {emotion['source']} | "
+                        f"voice {emotion['voice_label']} ({emotion['voice_confidence']:.2f}), "
+                        f"words {words} | ready {emotion['ready_ms']} ms after speech end"
                     )
                     self.send_event({
                         "type": "emotion",
@@ -349,7 +406,13 @@ class IncomingAudioTrack:
                         "confidence": emotion["confidence"],
                         "group": emotion["group"],
                         "confident": emotion["confident"],
+                        "source": emotion["source"],
+                        "voice_label": emotion["voice_label"],
+                        "voice_confidence": emotion["voice_confidence"],
+                        "text_label": emotion["text_label"],
+                        "text_confidence": emotion["text_confidence"],
                         "ms": emotion["ms"],
+                        "text_ms": emotion["text_ms"],
                         "ready_ms": emotion["ready_ms"],
                     })
 
@@ -593,6 +656,10 @@ class IncomingAudioTrack:
             "time": datetime.now().isoformat(timespec="seconds"),
             "transcript": transcript,
             "emotion": emotion["label"] if emotion else "",
+            "voice_label": emotion.get("voice_label", "") if emotion else "",
+            "text_label": (emotion.get("text_label") or "") if emotion else "",
+            "source": emotion.get("source", "") if emotion else "",
+            "text_ms": emotion.get("text_ms") if emotion else None,
             **metrics,
         })
 
