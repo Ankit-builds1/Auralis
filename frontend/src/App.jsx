@@ -4,6 +4,10 @@ import './ui-polish.css';
 
 const BACKEND_URL = `${import.meta.env.VITE_BACKEND_URL}/webrtc/offer`;
 
+// Week 3 Day 6: backend status + which models / devices it runs
+const HEALTH_URL = `${import.meta.env.VITE_BACKEND_URL}/health`;
+const HEALTH_POLL_MS = 15000;
+
 // Week 3 Day 3: 'ai_speaking' = Auralis is talking (Piper TTS)
 const VAD_STATES = ['idle', 'listening', 'speaking', 'processing', 'ai_speaking'];
 
@@ -141,6 +145,74 @@ const formatGuess = (label, confidence) =>
 
 const pctOf = (hit, total) => (total > 0 ? `${Math.round((hit / total) * 100)}%` : '—');
 
+// ---------------------------------------------------------------------------
+// Week 3 Day 6: system info chips + latency audit (compare machines)
+// ---------------------------------------------------------------------------
+
+// Latency runs are kept in this browser (localStorage) so a run measured on
+// Priya's CPU backend (via ngrok) can be compared with one on the GPU laptop.
+const AUDIT_STORAGE_KEY = 'auralis_latency_runs_v1';
+const AUDIT_MAX_RUNS = 10;
+
+const loadRuns = () => {
+  try {
+    const runs = JSON.parse(localStorage.getItem(AUDIT_STORAGE_KEY) || '[]');
+    return Array.isArray(runs) ? runs : [];
+  } catch {
+    return [];
+  }
+};
+
+const storeRuns = (runs) => {
+  try {
+    localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(runs));
+  } catch {
+    // storage blocked (private window) -> runs live only until reload
+  }
+};
+
+// Chips for the header. Older backends only send true/false flags, newer
+// ones (Backend Week 3 Day 6) also send model names and devices.
+const getSystemChips = (h) => {
+  if (!h) return [];
+  const chips = [];
+  const stt = h.stt && typeof h.stt === 'object' ? h.stt : null;
+
+  chips.push({
+    key: 'stt',
+    label: 'STT',
+    value: stt ? [stt.model ?? 'whisper', stt.device].filter(Boolean).join(' · ') : 'whisper',
+    ok: true,
+  });
+  const gpu = h.gpu ?? h.device?.gpu;
+  if (gpu) chips.push({ key: 'gpu', label: 'GPU', value: gpu, ok: true });
+  if (h.emotion !== undefined) {
+    chips.push({
+      key: 'emotion',
+      label: 'Voice emotion',
+      value: h.emotion ? h.emotion_model ?? 'on' : 'off',
+      ok: !!h.emotion,
+    });
+  }
+  if (h.text_emotion !== undefined) {
+    chips.push({ key: 'text', label: 'Words', value: h.text_emotion ? 'on' : 'off', ok: !!h.text_emotion });
+  }
+  if (h.tts !== undefined) {
+    chips.push({ key: 'tts', label: 'TTS', value: h.tts ? h.tts_engine ?? 'on' : 'off', ok: !!h.tts });
+  }
+  const llm = h.llm?.model ?? h.llm_model;
+  if (llm) chips.push({ key: 'llm', label: 'LLM', value: llm, ok: true });
+  return chips;
+};
+
+// Short machine name for a saved run, e.g. "cuda · RTX 2050"
+const describeMachine = (h) => {
+  if (!h) return 'unknown backend';
+  const device = h.stt?.device;
+  const gpu = h.gpu ?? h.device?.gpu;
+  return [device ? `STT on ${device}` : null, gpu].filter(Boolean).join(' · ') || 'backend';
+};
+
 // Week 3 Day 3: voice style Piper used for the reply (from the emotion group)
 const VOICE_STYLE_ICON = {
   normal: '🙂',
@@ -223,6 +295,13 @@ function App() {
   const [ttfas, setTtfas] = useState([]);
   const [echoCount, setEchoCount] = useState(0);
 
+  // Week 3 Day 6: backend health (models / devices) + saved latency runs
+  const [health, setHealth] = useState(null);
+  const [healthError, setHealthError] = useState(null);
+  const [healthMs, setHealthMs] = useState(null);
+  const [runs, setRuns] = useState(loadRuns);
+  const [runLabel, setRunLabel] = useState('');
+
   // Week 3 Day 4: one latency breakdown per turn (from 'turn_metrics')
   const [turnMetrics, setTurnMetrics] = useState([]);
 
@@ -270,6 +349,38 @@ function App() {
   const statsTimerRef = useRef(null);
 
   // Auto-scroll transcript to the newest line
+  // Week 3 Day 6: ask the backend what it is running, every 15 s
+  useEffect(() => {
+    let cancelled = false;
+
+    const check = async () => {
+      const started = performance.now();
+      try {
+        const res = await fetch(HEALTH_URL, {
+          headers: { 'ngrok-skip-browser-warning': 'true' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+        setHealth(data);
+        setHealthMs(Math.round(performance.now() - started));
+        setHealthError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setHealth(null);
+        setHealthMs(null);
+        setHealthError(err?.message || 'offline');
+      }
+    };
+
+    check();
+    const timer = setInterval(check, HEALTH_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns]);
@@ -332,6 +443,17 @@ function App() {
   }));
   const slowestStage = avgStages.reduce(
     (worst, stage) => ((stage.ms ?? 0) > (worst?.ms ?? -1) ? stage : worst),
+    null
+  );
+
+  // Week 3 Day 6: system chips + latency run comparison
+  const systemChips = getSystemChips(health);
+  const fastestRun = runs.reduce(
+    (best, run) => (run.p50 !== null && (best === null || run.p50 < best.p50) ? run : best),
+    null
+  );
+  const slowestRun = runs.reduce(
+    (worst, run) => (run.p50 !== null && (worst === null || run.p50 > worst.p50) ? run : worst),
     null
   );
 
@@ -1314,6 +1436,54 @@ function App() {
   };
 
   // ---------------------------------------------------------
+  // Week 3 Day 6: LATENCY AUDIT (compare machines)
+  // ---------------------------------------------------------
+
+  const saveRun = () => {
+    if (turnMetrics.length === 0) return;
+    const now = new Date();
+    const run = {
+      id: now.toISOString(),
+      label: runLabel.trim() || describeMachine(health),
+      machine: describeMachine(health),
+      savedAt: now.toLocaleString(),
+      turns: turnMetrics.length,
+      p50: p50Ttfa,
+      p95: p95Ttfa,
+      stages: Object.fromEntries(avgStages.map((stage) => [stage.key, stage.ms])),
+    };
+    const next = [...runs, run].slice(-AUDIT_MAX_RUNS);
+    setRuns(next);
+    storeRuns(next);
+    setRunLabel('');
+    addEvent(`Latency run saved: ${run.label} (${run.turns} turns, first audio p50 ${formatMs(run.p50)})`);
+  };
+
+  const deleteRun = (id) => {
+    const next = runs.filter((run) => run.id !== id);
+    setRuns(next);
+    storeRuns(next);
+  };
+
+  const exportRuns = () => {
+    if (runs.length === 0) return;
+    const header = ['label', 'machine', 'saved_at', 'turns', 'stt_ms', 'llm_ms', 'phrase_ms',
+      'voice_ms', 'first_audio_p50_ms', 'first_audio_p95_ms'];
+    const escape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rows = runs.map((r) =>
+      [r.label, r.machine, r.savedAt, r.turns, r.stages?.stt, r.stages?.llm, r.stages?.piece,
+        r.stages?.tts, r.p50, r.p95].map(escape).join(',')
+    );
+    const blob = new Blob([[header.join(','), ...rows].join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `auralis_latency_runs_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ---------------------------------------------------------
   // VAD DISPLAY
   // ---------------------------------------------------------
 
@@ -1344,11 +1514,32 @@ function App() {
               <p>REAL-TIME VOICE INTELLIGENCE ENGINE</p>
             </div>
           </div>
-          <div className="system-status">
+          <div
+            className={`system-status ${
+              health ? '' : healthError ? 'is-offline' : 'is-connecting'
+            }`}
+            title={healthError ? `health check failed: ${healthError}` : HEALTH_URL}
+          >
             <span className="status-dot"></span>
-            SYSTEM ONLINE
+            {health
+              ? `BACKEND ONLINE${healthMs !== null ? ` · ${healthMs} MS` : ''}`
+              : healthError
+                ? 'BACKEND OFFLINE'
+                : 'CHECKING BACKEND…'}
           </div>
         </header>
+
+        {/* SYSTEM CHIPS (Week 3 Day 6): what the backend is running */}
+        {systemChips.length > 0 && (
+          <div className="system-chips">
+            {systemChips.map((chip) => (
+              <span key={chip.key} className={`system-chip ${chip.ok ? '' : 'chip-off'}`}>
+                <span className="chip-label">{chip.label}</span>
+                <span className="chip-value">{chip.value}</span>
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="dashboard-grid">
 
@@ -1849,6 +2040,98 @@ function App() {
                 })
               )}
             </div>
+          </section>
+
+          {/* LATENCY AUDIT: COMPARE MACHINES (Week 3 Day 6) */}
+
+          <section className="card full">
+            <div className="card-title">
+              <h2>Latency Audit · Compare Machines</h2>
+              <span>
+                SAVE A RUN PER BACKEND (CPU / GPU) → COMPARE
+                {runs.length > 0 && (
+                  <button className="btn-link" onClick={exportRuns}>&nbsp;· EXPORT CSV</button>
+                )}
+              </span>
+            </div>
+
+            <div className="audit-save">
+              <input
+                className="audit-input"
+                value={runLabel}
+                onChange={(e) => setRunLabel(e.target.value)}
+                placeholder={`run name, e.g. "Priya CPU" (default: ${describeMachine(health)})`}
+                maxLength={40}
+              />
+              <button
+                className="audit-save-btn"
+                onClick={saveRun}
+                disabled={turnMetrics.length === 0}
+                title={turnMetrics.length === 0 ? 'say something first' : 'save this session as a run'}
+              >
+                SAVE THIS RUN ({turnMetrics.length} turns)
+              </button>
+            </div>
+            <div className="test-hint">
+              How to compare: connect to one backend, speak 5+ turns, save the run, press CLEAR in
+              Conversation, switch VITE_BACKEND_URL to the other backend, repeat. Runs stay in this browser.
+            </div>
+
+            {runs.length === 0 ? (
+              <div className="transcript-placeholder">No runs saved yet.</div>
+            ) : (
+              <>
+                <div className="audit-table-wrap audit-runs">
+                  <table className="audit-table">
+                    <thead>
+                      <tr>
+                        <th>Run</th>
+                        <th>Turns</th>
+                        {LATENCY_STAGES.map((stage) => (
+                          <th key={stage.key}>{stage.label}</th>
+                        ))}
+                        <th>First audio p50</th>
+                        <th>p95</th>
+                        <th>vs {LATENCY_TARGET_MS} ms</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {runs.map((run) => (
+                        <tr key={run.id}>
+                          <td title={`${run.machine} · ${run.savedAt}`}>
+                            {run === fastestRun && runs.length > 1 ? '🏆 ' : ''}
+                            {run.label}
+                          </td>
+                          <td>{run.turns}</td>
+                          {LATENCY_STAGES.map((stage) => (
+                            <td key={stage.key}>{formatMs(run.stages?.[stage.key])}</td>
+                          ))}
+                          <td className={getLatencyClass(run.p50)}>{formatMs(run.p50)}</td>
+                          <td className={getLatencyClass(run.p95)}>{formatMs(run.p95)}</td>
+                          <td className={getLatencyClass(run.p50)}>
+                            {run.p50 !== null ? `${(run.p50 / LATENCY_TARGET_MS).toFixed(1)}×` : '—'}
+                          </td>
+                          <td>
+                            <button className="btn-link" onClick={() => deleteRun(run.id)} title="delete run">
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {fastestRun && slowestRun && fastestRun !== slowestRun && fastestRun.p50 > 0 && (
+                  <div className="audit-verdict">
+                    <strong>{fastestRun.label}</strong> starts speaking{' '}
+                    <strong>{(slowestRun.p50 / fastestRun.p50).toFixed(1)}× faster</strong> than{' '}
+                    <strong>{slowestRun.label}</strong> (first audio p50 {formatMs(fastestRun.p50)} vs{' '}
+                    {formatMs(slowestRun.p50)}).
+                  </div>
+                )}
+              </>
+            )}
           </section>
 
           {/* TRANSCRIPTION AUDIT */}

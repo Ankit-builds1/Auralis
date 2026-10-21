@@ -916,3 +916,100 @@ body::after {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   Week 3 Day 6: system chips + latency audit (compare machines)
+   ========================================================= */
+
+.auralis-app .auralis-container .system-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 22px;
+}
+
+.auralis-app .auralis-container .system-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.auralis-app .auralis-container .system-chip .chip-label {
+  color: var(--ui-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.auralis-app .auralis-container .system-chip .chip-value {
+  color: var(--ui-good);
+}
+
+.auralis-app .auralis-container .system-chip.chip-off .chip-value {
+  color: var(--ui-bad);
+}
+
+.auralis-app .auralis-container .audit-save {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.auralis-app .auralis-container .audit-input {
+  flex: 1;
+  min-width: 220px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.auralis-app .auralis-container .audit-input:focus {
+  outline: none;
+  border-color: var(--ui-accent);
+}
+
+.auralis-app .auralis-container .audit-save-btn {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-accent);
+  background: var(--ui-surface-strong);
+  color: var(--ui-accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+
+.auralis-app .auralis-container .audit-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.auralis-app .auralis-container .audit-runs {
+  max-height: none;
+  overflow-x: auto;
+}
+
+.auralis-app .auralis-container .audit-runs .audit-table th {
+  position: static;
+}
+
+.auralis-app .auralis-container .audit-verdict {
+  margin-top: 12px;
+  color: var(--ui-text-soft);
+  font-size: 13px;
+}
+
+.auralis-app .auralis-container .audit-verdict strong {
+  color: var(--ui-accent);
+}
