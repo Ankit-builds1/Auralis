@@ -361,6 +361,9 @@ function App() {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+        // ngrok / proxies can answer even when OUR backend is not there,
+        // so only trust a real Auralis health reply.
+        if (data?.status !== 'ok') throw new Error('not an Auralis backend');
         if (cancelled) return;
         setHealth(data);
         setHealthMs(Math.round(performance.now() - started));
