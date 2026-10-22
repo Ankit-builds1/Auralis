@@ -175,6 +175,135 @@ const drawWave = (canvas, wave, color) => {
   return rms;
 };
 
+// ---------------------------------------------------------
+// Week 4 Day 3: premium "Experience" view (voice orb + clean chat)
+// ---------------------------------------------------------
+
+const VIEW_STORAGE_KEY = 'auralis_view_v1';
+
+const loadView = () => {
+  try {
+    return localStorage.getItem(VIEW_STORAGE_KEY) === 'engineer' ? 'engineer' : 'experience';
+  } catch {
+    return 'experience';
+  }
+};
+
+const hexToRgba = (hex, alpha) => {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+};
+
+// Reads one analyser and returns its RMS level (0 when there is no audio)
+const readLevel = (wave) => {
+  if (!wave) return 0;
+  wave.analyser.getFloatTimeDomainData(wave.buffer);
+  let sum = 0;
+  for (let i = 0; i < wave.buffer.length; i++) sum += wave.buffer[i] * wave.buffer[i];
+  return Math.sqrt(sum / wave.buffer.length);
+};
+
+// The voice orb: breathes when idle, swells and ripples with whoever is
+// talking, coloured by the detected emotion / Auralis's voice style.
+const drawOrb = (canvas, level, color, wave, time) => {
+  if (!canvas) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const size = canvas.clientWidth;
+  if (size === 0) return;
+  if (canvas.width !== Math.round(size * dpr)) {
+    canvas.width = Math.round(size * dpr);
+    canvas.height = Math.round(size * dpr);
+  }
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, size, size);
+
+  const c = size / 2;
+  const breathe = Math.sin(time / 1400) * 0.025;
+  const base = size * 0.22;
+  const radius = base * (1 + breathe + Math.min(level * 8, 0.32));
+
+  // soft outer glow, always fading to nothing before the canvas edge
+  const glow = ctx.createRadialGradient(c, c, radius * 0.5, c, c, c * 0.98);
+  glow.addColorStop(0, hexToRgba(color, 0.30 + Math.min(level * 4, 0.22)));
+  glow.addColorStop(0.55, hexToRgba(color, 0.08));
+  glow.addColorStop(1, hexToRgba(color, 0));
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(c, c, c, 0, Math.PI * 2);
+  ctx.fill();
+
+  // rippled edge from the live voice: loudness of small slices of the
+  // waveform, smoothed around the circle (a soft blob, never spiky)
+  const points = 72;
+  const bumps = new Array(points).fill(0);
+  if (wave) {
+    const slice = Math.floor(wave.buffer.length / points);
+    for (let i = 0; i < points; i++) {
+      let sum = 0;
+      for (let j = 0; j < slice; j++) sum += Math.abs(wave.buffer[i * slice + j] || 0);
+      bumps[i] = Math.min(1, (sum / slice) * 6);
+    }
+    for (let pass = 0; pass < 3; pass++) {
+      const copy = bumps.slice();
+      for (let i = 0; i < points; i++) {
+        bumps[i] = (copy[(i - 1 + points) % points] + copy[i] * 2 + copy[(i + 1) % points]) / 4;
+      }
+    }
+  }
+
+  ctx.beginPath();
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * Math.PI * 2;
+    const wobble = Math.sin(angle * 3 + time / 900) * 1.5 + bumps[i % points] * radius * 0.16;
+    const r = radius + wobble;
+    const x = c + Math.cos(angle) * r;
+    const y = c + Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+
+  const body = ctx.createRadialGradient(
+    c - radius * 0.35, c - radius * 0.4, radius * 0.1, c, c, radius * 1.05
+  );
+  body.addColorStop(0, 'rgba(255, 255, 255, 0.92)');
+  body.addColorStop(0.28, hexToRgba(color, 0.95));
+  body.addColorStop(1, hexToRgba(color, 0.18));
+  ctx.fillStyle = body;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 40;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // thin highlight ring
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+};
+
+// Minimal line icons (premium look: no emoji in the Experience view)
+const Icon = ({ name, size = 18 }) => {
+  const paths = {
+    mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></>,
+    stop: <rect x="6" y="6" width="12" height="12" rx="2.5" />,
+    hand: <path d="M8 13V6.5a1.5 1.5 0 0 1 3 0V12m0-7a1.5 1.5 0 0 1 3 0v7m0-5.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5a6 6 0 0 1-4.6-2.2L4.5 15a1.6 1.6 0 0 1 2.4-2.1L8 14" />,
+    sliders: <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4" />,
+    sparkle: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />,
+  };
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+    >
+      {paths[name]}
+    </svg>
+  );
+};
+
 // Week 3 Day 2: emoji for each emotion label sent by the backend
 const EMOTION_EMOJI = {
   angry: '😠',
@@ -404,6 +533,9 @@ function App() {
   const [runs, setRuns] = useState(loadRuns);
   const [runLabel, setRunLabel] = useState('');
 
+  // Week 4 Day 3: 'experience' (premium demo view) or 'engineer' (all metrics)
+  const [view, setView] = useState(loadView);
+
   // Week 3 Day 4: one latency breakdown per turn (from 'turn_metrics')
   const [turnMetrics, setTurnMetrics] = useState([]);
 
@@ -463,6 +595,11 @@ function App() {
   const userWaveColorRef = useRef(WAVE_EMOTION_COLORS.neutral);
   const aiWaveColorRef = useRef(WAVE_VOICE_COLORS.normal);
 
+  // Week 4 Day 3: Experience view orb + chat scroll
+  const orbCanvasRef = useRef(null);
+  const orbLevelRef = useRef(0);
+  const xpChatRef = useRef(null);
+
   // Week 4 Day 1: one animation loop draws both waveforms
   useEffect(() => {
     let raf = null;
@@ -493,6 +630,25 @@ function App() {
         aiCanvasRef.current, aiCut ? null : aiWaveRef.current, aiWaveColorRef.current,
         aiWavePanelRef.current, aiWaveLabelRef.current, aiCut ? 'stopped · muted' : 'not connected'
       );
+
+      // Week 4 Day 3: voice orb follows whoever is talking
+      if (orbCanvasRef.current) {
+        const micLevel = readLevel(micWaveRef.current);
+        const aiLevel = aiCut ? 0 : readLevel(aiWaveRef.current);
+        const aiLeads = aiLevel > WAVE_ACTIVE_RMS && aiLevel >= micLevel;
+        const target = Math.max(micLevel, aiLevel);
+        // smooth: fast attack, slow release
+        const prev = orbLevelRef.current;
+        orbLevelRef.current = target > prev ? prev + (target - prev) * 0.5 : prev * 0.92;
+        drawOrb(
+          orbCanvasRef.current,
+          orbLevelRef.current,
+          aiLeads ? aiWaveColorRef.current : userWaveColorRef.current,
+          aiLeads ? aiWaveRef.current : micLevel > WAVE_ACTIVE_RMS ? micWaveRef.current : null,
+          performance.now()
+        );
+      }
+
       raf = requestAnimationFrame(tick);
     };
 
@@ -538,7 +694,18 @@ function App() {
 
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Week 4 Day 3: Experience chat scrolls inside its own box
+    if (xpChatRef.current) xpChatRef.current.scrollTop = xpChatRef.current.scrollHeight;
   }, [turns]);
+
+  // Week 4 Day 3: remember the chosen view in this browser
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_STORAGE_KEY, view);
+    } catch {
+      // storage blocked: the view just resets on reload
+    }
+  }, [view]);
 
   // Clean up the mic meter and stats timer if the component unmounts
   useEffect(() => {
@@ -1844,6 +2011,41 @@ function App() {
     }[vadState] || 'IDLE');
 
   // ---------------------------------------------------------
+  // Week 4 Day 3: EXPERIENCE VIEW helpers
+  // ---------------------------------------------------------
+
+  const isLive = iceState === 'connected' || iceState === 'completed';
+  const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
+  const isThinking =
+    vadState === 'processing' ||
+    (lastTurn && (lastTurn.aiState === 'waiting' || lastTurn.aiState === 'streaming') &&
+      vadState !== 'ai_speaking' && vadState !== 'speaking');
+
+  const xpPhase = !isLive
+    ? isConnecting
+      ? { key: 'connecting', title: 'Connecting…', sub: 'Setting up a private voice line' }
+      : { key: 'ready', title: 'Talk to Auralis', sub: 'Start a conversation and just speak' }
+    : vadState === 'speaking'
+      ? { key: 'listening', title: 'Listening', sub: 'Pause when you are done' }
+      : aiStoppedNow
+        ? { key: 'stopped', title: 'Stopped', sub: 'Go ahead, I am listening' }
+        : vadState === 'ai_speaking'
+          ? { key: 'speaking', title: 'Auralis is speaking', sub: 'Talk over me any time to interrupt' }
+          : isThinking
+            ? { key: 'thinking', title: 'Thinking', sub: 'Understanding your words and your tone' }
+            : { key: 'idle', title: 'I am listening', sub: 'Say something whenever you are ready' };
+
+  const startConversation = async () => {
+    await startMic();
+    await connectWebRTC();
+  };
+
+  const formatSeconds = (ms) =>
+    ms === null || ms === undefined ? '—' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+
+  const xpTurns = turns.slice(-12);
+
+  // ---------------------------------------------------------
   // UI
   // ---------------------------------------------------------
 
@@ -1859,6 +2061,26 @@ function App() {
               <p>REAL-TIME VOICE INTELLIGENCE ENGINE</p>
             </div>
           </div>
+          <div className="header-right">
+          {/* Week 4 Day 3: Experience / Engineer view switch */}
+          <div className="view-toggle" role="tablist" aria-label="View">
+            <button
+              role="tab"
+              aria-selected={view === 'experience'}
+              className={view === 'experience' ? 'is-active' : ''}
+              onClick={() => setView('experience')}
+            >
+              <Icon name="sparkle" size={14} /> Experience
+            </button>
+            <button
+              role="tab"
+              aria-selected={view === 'engineer'}
+              className={view === 'engineer' ? 'is-active' : ''}
+              onClick={() => setView('engineer')}
+            >
+              <Icon name="sliders" size={14} /> Engineer
+            </button>
+          </div>
           <div
             className={`system-status ${
               health ? '' : healthError ? 'is-offline' : 'is-connecting'
@@ -1872,7 +2094,144 @@ function App() {
                 ? 'BACKEND OFFLINE'
                 : 'CHECKING BACKEND…'}
           </div>
+          </div>
         </header>
+
+        {/* ================= EXPERIENCE VIEW (Week 4 Day 3) ================= */}
+
+        {view === 'experience' && (
+          <div className={`xp phase-${xpPhase.key}`}>
+            <section className="xp-stage">
+              <div className="xp-orb-wrap">
+                <canvas ref={orbCanvasRef} className="xp-orb" />
+              </div>
+
+              <div className="xp-status" aria-live="polite">
+                <h2 className="xp-title">
+                  {xpPhase.title}
+                  {(xpPhase.key === 'thinking' || xpPhase.key === 'connecting') && (
+                    <span className="xp-dots"><span /><span /><span /></span>
+                  )}
+                </h2>
+                <p className="xp-sub">{xpPhase.sub}</p>
+              </div>
+
+              <div className="xp-meta">
+                <span
+                  className="xp-pill"
+                  style={{ '--pill-color': userWaveColor }}
+                  title={lastEmotion?.source ? `decided by ${lastEmotion.source}` : 'voice tone + words'}
+                >
+                  <span className="xp-dot" />
+                  {lastEmotionView ? `Feeling ${lastEmotionView.text}` : 'Emotion appears as you speak'}
+                </span>
+                <span className="xp-pill" style={{ '--pill-color': aiWaveColor }}>
+                  <span className="xp-dot" />
+                  {lastVoiceStyle} voice
+                </span>
+                {lastTtfa !== null && (
+                  <span className="xp-pill xp-pill-quiet" title="end of your speech → Auralis's first sound">
+                    replies in {formatSeconds(lastTtfa)}
+                  </span>
+                )}
+              </div>
+
+              <div className="xp-controls">
+                {!isLive ? (
+                  <button
+                    className="xp-btn xp-btn-primary"
+                    onClick={startConversation}
+                    disabled={isConnecting || !health}
+                  >
+                    <Icon name="mic" />
+                    {isConnecting ? 'Connecting…' : 'Start conversation'}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="xp-btn xp-btn-ghost xp-btn-warn"
+                      onClick={stopAuralis}
+                      disabled={!aiCanBeStopped}
+                    >
+                      <Icon name="hand" /> Interrupt
+                    </button>
+                    <button className="xp-btn xp-btn-ghost" onClick={stopMic}>
+                      <Icon name="stop" /> End
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {!health && !isLive && (
+                <p className="xp-note">Waiting for the Auralis backend to come online…</p>
+              )}
+              {error && <p className="xp-error">{error}</p>}
+            </section>
+
+            <section className="xp-chat-card">
+              <div className="xp-chat-head">
+                <span>Conversation</span>
+                {turns.length > 0 && (
+                  <button className="xp-link" onClick={clearHistory}>Clear</button>
+                )}
+              </div>
+
+              <div className="xp-chat" ref={xpChatRef}>
+                {xpTurns.length === 0 ? (
+                  <div className="xp-empty">
+                    <p>Your conversation will appear here.</p>
+                    <p className="xp-empty-hint">
+                      Try: “I had a really stressful day at work.”
+                    </p>
+                  </div>
+                ) : (
+                  xpTurns.map((turn) => {
+                    const ev = getEmotionView(turn.emotion);
+                    const color = ev ? WAVE_EMOTION_COLORS[ev.text] ?? WAVE_EMOTION_COLORS.neutral : null;
+                    return (
+                      <div className="xp-turn" key={turn.id}>
+                        <div className="xp-msg xp-msg-user">
+                          <p>{turn.userText}</p>
+                          {ev && (
+                            <span className="xp-tag" style={{ '--pill-color': color }}>
+                              <span className="xp-dot" /> {ev.text}
+                            </span>
+                          )}
+                        </div>
+
+                        <div
+                          className={`xp-msg xp-msg-ai ai-${turn.aiState}`}
+                          title={[
+                            turn.ttftMs != null && `first word ${turn.ttftMs} ms`,
+                            turn.voice?.ttfaMs != null && `first audio ${turn.voice.ttfaMs} ms`,
+                            turn.voice?.style && `${turn.voice.style} voice`,
+                          ].filter(Boolean).join(' · ')}
+                        >
+                          <span className="xp-ai-mark" aria-hidden="true" />
+                          <p>
+                            {turn.aiState === 'waiting' && (
+                              <span className="xp-dots"><span /><span /><span /></span>
+                            )}
+                            {turn.aiState === 'error' && <span className="xp-err">{turn.error}</span>}
+                            {(turn.aiState === 'streaming' || turn.aiState === 'done' ||
+                              turn.aiState === 'interrupted') && turn.aiText}
+                            {turn.aiState === 'interrupted' && (
+                              <span className="xp-cut"> — interrupted</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* ================= ENGINEER VIEW (everything below) ================= */}
+
+        {view === 'engineer' && (<>
 
         {/* SYSTEM CHIPS (Week 3 Day 6): what the backend is running */}
         {systemChips.length > 0 && (
@@ -2654,6 +3013,8 @@ function App() {
           </section>
 
         </div>
+
+        </>)}
 
         <div className="footer">AURALIS // REAL-TIME MULTI-MODEL VOICE SYSTEM</div>
 

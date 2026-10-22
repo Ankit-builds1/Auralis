@@ -1202,3 +1202,413 @@ body::after {
 .auralis-app .auralis-container .vad-box.vad-ai_stopped .vad-name {
   color: #fbbf24;
 }
+/* =========================================================
+   Week 4 Day 3: premium EXPERIENCE view
+   ========================================================= */
+
+/* ---- header: view switch ---- */
+.auralis-app .auralis-container .header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.auralis-app .auralis-container .view-toggle {
+  display: inline-flex;
+  padding: 4px;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.auralis-app .auralis-container .view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: 500 13px/1 'Inter', sans-serif;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.auralis-app .auralis-container .view-toggle button:hover {
+  color: var(--text);
+}
+
+.auralis-app .auralis-container .view-toggle button.is-active {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.auralis-app .auralis-container .view-toggle button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* ---- layout ---- */
+.auralis-app .auralis-container .xp {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: stretch;
+  min-height: calc(100vh - 220px);
+}
+
+.auralis-app .auralis-container .xp-stage,
+.auralis-app .auralis-container .xp-chat-card {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 28px;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(139, 125, 255, 0.08), transparent 60%),
+    rgba(10, 13, 34, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.8);
+}
+
+/* ---- stage: orb + status + controls ---- */
+.auralis-app .auralis-container .xp-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 40px 28px 36px;
+  text-align: center;
+}
+
+.auralis-app .auralis-container .xp-orb-wrap {
+  width: min(360px, 78vw);
+  aspect-ratio: 1;
+}
+
+.auralis-app .auralis-container .xp-orb {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.auralis-app .auralis-container .xp-title {
+  margin: 0;
+  color: var(--text);
+  font: 600 30px/1.15 'Inter', sans-serif;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+
+.auralis-app .auralis-container .xp-sub {
+  margin: 8px 0 0;
+  color: var(--text-dim);
+  font: 400 15px/1.5 'Inter', sans-serif;
+}
+
+/* thinking / connecting dots */
+.auralis-app .auralis-container .xp-dots {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.auralis-app .auralis-container .xp-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: xp-dot 1.2s infinite ease-in-out;
+}
+
+.auralis-app .auralis-container .xp-dots span:nth-child(2) { animation-delay: 0.15s; }
+.auralis-app .auralis-container .xp-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes xp-dot {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* emotion / voice / latency pills */
+.auralis-app .auralis-container .xp-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.auralis-app .auralis-container .xp-pill,
+.auralis-app .auralis-container .xp-tag {
+  --pill-color: #2dd4bf;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim);
+  font: 500 13px/1 'Inter', sans-serif;
+  text-transform: none;
+}
+
+.auralis-app .auralis-container .xp-tag {
+  text-transform: capitalize;
+}
+
+.auralis-app .auralis-container .xp-pill-quiet {
+  text-transform: none;
+  color: var(--text-muted);
+}
+
+.auralis-app .auralis-container .xp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pill-color);
+  box-shadow: 0 0 10px var(--pill-color);
+}
+
+/* buttons */
+.auralis-app .auralis-container .xp-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.auralis-app .auralis-container .xp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 26px;
+  border-radius: 999px;
+  font: 600 15px/1 'Inter', sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.25s ease, background 0.2s ease, opacity 0.2s ease;
+}
+
+.auralis-app .auralis-container .xp-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.auralis-app .auralis-container .xp-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.auralis-app .auralis-container .xp-btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+.auralis-app .auralis-container .xp-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.auralis-app .auralis-container .xp-btn-primary {
+  min-width: 240px;
+  border: 0;
+  color: #06081a;
+  background: linear-gradient(135deg, #f4f6ff 0%, #c9d4ff 100%);
+  box-shadow: 0 12px 40px -12px rgba(139, 125, 255, 0.7);
+}
+
+.auralis-app .auralis-container .xp-btn-primary:hover:not(:disabled) {
+  box-shadow: 0 16px 50px -12px rgba(139, 125, 255, 0.9);
+}
+
+.auralis-app .auralis-container .xp-btn-ghost {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.auralis-app .auralis-container .xp-btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auralis-app .auralis-container .xp-btn-warn {
+  color: #fcd34d;
+  border-color: rgba(252, 211, 77, 0.3);
+}
+
+.auralis-app .auralis-container .xp-note,
+.auralis-app .auralis-container .xp-error {
+  margin: 0;
+  font: 400 13px/1.5 'Inter', sans-serif;
+  color: var(--text-muted);
+}
+
+.auralis-app .auralis-container .xp-error {
+  color: #fda4af;
+}
+
+/* ---- chat ---- */
+.auralis-app .auralis-container .xp-chat-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 22px 8px 8px 22px;
+}
+
+.auralis-app .auralis-container .xp-chat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 14px 14px 0;
+  color: var(--text-muted);
+  font: 500 13px/1 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .xp-link {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: 500 13px/1 'Inter', sans-serif;
+  cursor: pointer;
+}
+
+.auralis-app .auralis-container .xp-link:hover {
+  color: var(--text);
+}
+
+.auralis-app .auralis-container .xp-chat {
+  flex: 1;
+  min-height: 320px;
+  max-height: calc(100vh - 290px);
+  overflow-y: auto;
+  padding-right: 14px;
+  scroll-behavior: smooth;
+}
+
+.auralis-app .auralis-container .xp-empty {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  min-height: 300px;
+  text-align: center;
+  color: var(--text-muted);
+  font: 400 15px/1.6 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .xp-empty p {
+  margin: 0;
+}
+
+.auralis-app .auralis-container .xp-empty-hint {
+  margin-top: 6px !important;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.auralis-app .auralis-container .xp-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.auralis-app .auralis-container .xp-msg p {
+  margin: 0;
+  font: 400 15.5px/1.65 'Inter', sans-serif;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.auralis-app .auralis-container .xp-msg-user {
+  align-self: flex-end;
+  max-width: 82%;
+  padding: 12px 16px;
+  border-radius: 20px 20px 6px 20px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auralis-app .auralis-container .xp-msg-user .xp-tag {
+  margin-top: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+}
+
+.auralis-app .auralis-container .xp-msg-ai {
+  display: flex;
+  gap: 12px;
+  max-width: 92%;
+}
+
+.auralis-app .auralis-container .xp-ai-mark {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0%, #a78bfa 45%, #38e1ff 100%);
+  box-shadow: 0 0 14px rgba(139, 125, 255, 0.6);
+}
+
+.auralis-app .auralis-container .xp-msg-ai.ai-interrupted p {
+  color: var(--text-dim);
+}
+
+.auralis-app .auralis-container .xp-cut {
+  color: #fcd34d;
+  font-size: 13px;
+}
+
+.auralis-app .auralis-container .xp-err {
+  color: #fda4af;
+}
+
+/* ---- phase accents ---- */
+.auralis-app .auralis-container .xp.phase-stopped .xp-title {
+  color: #fcd34d;
+}
+
+/* ---- responsive ---- */
+@media (max-width: 980px) {
+  .auralis-app .auralis-container .xp {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .auralis-app .auralis-container .xp-chat {
+    max-height: 60vh;
+  }
+}
+
+@media (max-width: 520px) {
+  .auralis-app .auralis-container .xp-stage {
+    padding: 28px 16px;
+  }
+
+  .auralis-app .auralis-container .xp-title {
+    font-size: 24px;
+  }
+
+  .auralis-app .auralis-container .xp-btn-primary {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auralis-app .auralis-container .xp-dots span {
+    animation: none;
+    opacity: 0.7;
+  }
+}
