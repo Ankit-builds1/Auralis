@@ -50,6 +50,11 @@ BARGE_IN_MIN_VOICED_FRAMES = int(os.getenv("BARGE_IN_MIN_VOICED_FRAMES", "20"))
 # Until ~1 s of the user's speech has been heard, the plain rule above is used.
 BARGE_IN_GATE_DB = float(os.getenv("BARGE_IN_GATE_DB", "5"))
 BARGE_IN_GATED_FRAMES = int(os.getenv("BARGE_IN_GATED_FRAMES", "10"))
+# Week 4: live tests showed the voice model says "disgust" far too often on
+# our voices (e.g. "Tell me a bank joke" -> disgust 84 %). When ONLY the voice
+# says disgust, it must be at least this sure, otherwise it is not used.
+VOICE_DISGUST_MIN = float(os.getenv("VOICE_DISGUST_MIN", "0.9"))
+
 USER_LEVEL_MIN_FRAMES = 50          # voiced frames needed to trust the level
 USER_LEVEL_HISTORY = 1500           # ~30 s of the user's voiced frames
 
@@ -71,6 +76,19 @@ def _log_latency(row):
     try:
         LATENCY_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         new_file = not LATENCY_LOG_PATH.exists()
+
+        # Week 4 fix: a log started by an older version has fewer columns,
+        # and new rows would land under the wrong headers. Keep the old file
+        # aside and start a fresh one with the current header.
+        if not new_file:
+            with open(LATENCY_LOG_PATH, newline="", encoding="utf-8") as f:
+                header = next(csv.reader(f), [])
+            if header != LATENCY_FIELDS:
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                old = LATENCY_LOG_PATH.with_name(f"latency_old_{stamp}.csv")
+                LATENCY_LOG_PATH.rename(old)
+                print(f"[LATENCY] Old log format -> moved to {old.name}, new log started")
+                new_file = True
         with open(LATENCY_LOG_PATH, "a", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=LATENCY_FIELDS, extrasaction="ignore")
             if new_file:
@@ -534,7 +552,7 @@ class IncomingAudioTrack:
             text = None
 
         if text is None or not emotion.get("probs"):
-            return emotion
+            return self._damp_voice_disgust(emotion)
 
         label, confidence, source = text_emotion.fuse(emotion["probs"], text["probs"])
 
@@ -557,6 +575,17 @@ class IncomingAudioTrack:
             text_ms=text["ms"],
             ready_ms=round((time.perf_counter() - speech_end_time) * 1000),
         )
+        return self._damp_voice_disgust(emotion)
+
+    def _damp_voice_disgust(self, emotion):
+        """Week 4: a voice-only 'disgust' below VOICE_DISGUST_MIN is not trusted."""
+        if (emotion.get("source") == "voice" and emotion.get("label") == "disgust"
+                and emotion.get("voice_confidence", emotion["confidence"]) < VOICE_DISGUST_MIN
+                and emotion.get("confident")):
+            emotion.update(confident=False, group="okay",
+                           hint=emotion_engine.LLM_HINTS["okay"])
+            print(f"[EMOTION] voice-only disgust ({emotion.get('voice_confidence', 0):.2f}) "
+                  f"< {VOICE_DISGUST_MIN} -> not used")
         return emotion
 
     async def _handle_turn(self, segment, speech_end_time):

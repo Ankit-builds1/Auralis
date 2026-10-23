@@ -26,6 +26,32 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 CSV_PATH = BACKEND_DIR / "logs" / "latency.csv"
 TARGET_MS = 800
 
+# Same order as LATENCY_FIELDS in app/webrtc/audio_track.py. Logs started by
+# an older backend have a shorter header; their newer rows use this order.
+CURRENT_FIELDS = [
+    "time", "transcript", "emotion", "voice_label", "text_label", "source",
+    "voice", "text_ms",
+    "stt_ms", "emotion_ms", "ttft_ms", "first_piece_ms", "ttfa_ms",
+    "first_synth_ms", "total_ms", "audio_ms", "pieces", "tokens",
+]
+
+
+def read_rows(path):
+    """Rows as dicts, fixing logs whose header is older than their rows."""
+    with open(path, newline="", encoding="utf-8") as f:
+        lines = list(csv.reader(f))
+    if not lines:
+        return []
+    header, rows = lines[0], []
+    for line in lines[1:]:
+        if not line:
+            continue
+        if len(line) == len(CURRENT_FIELDS) and len(header) != len(CURRENT_FIELDS):
+            rows.append(dict(zip(CURRENT_FIELDS, line)))
+        elif len(line) == len(header):
+            rows.append(dict(zip(header, line)))
+    return rows
+
 
 def num(row, key):
     try:
@@ -58,8 +84,7 @@ def main():
     if not path.exists():
         raise SystemExit(f"No latency log at {path} - talk to Auralis first (LATENCY_LOG=1).")
 
-    with open(path, newline="", encoding="utf-8") as f:
-        rows = list(csv.DictReader(f))
+    rows = read_rows(path)
     if args.since:
         rows = [r for r in rows if (r.get("time") or "") >= args.since]
     rows = rows[-args.last:]
