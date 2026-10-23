@@ -1,4 +1,5 @@
 import math
+import os
 
 import numpy as np
 import torch
@@ -50,7 +51,9 @@ class VoiceActivityDetector:
     # Consecutive silence chunks needed to end (22 x 32 ms = ~700 ms).
     # NOTE: this is the ONLY silence wait. Keep the hangover in
     # processor.py small (0-200 ms) or the two waits add up.
-    SILENCE_CHUNKS_TO_END = 22
+    # Week 4 latency: VAD_SILENCE_MS in .env (e.g. 500 = Auralis answers
+    # ~200 ms sooner; too low and long sentences get split at pauses).
+    SILENCE_CHUNKS_TO_END = max(8, round(int(os.getenv("VAD_SILENCE_MS", "700")) / 32))
 
     def __init__(self):
         self.model = load_silero_vad(onnx=True)

@@ -1,6 +1,8 @@
 import time
 from collections import deque
 
+import numpy as np
+
 from app.audio.metrics.latency import LatencyTracker
 from app.audio.segments.speech_segment import SpeechSegment
 from app.audio.vad.detector import VoiceActivityDetector
@@ -23,6 +25,27 @@ PRE_ROLL_FRAMES = 15
 # Shorter segments (coughs, clicks, desk taps) are skipped so Whisper
 # does not hallucinate text like "Thank you."
 MIN_VOICED_FRAMES = 10
+
+def frame_level_db(frame):
+    """
+    Week 4: loudness of one WebRTC frame in dBFS (0 = full scale).
+    Used by barge-in to tell the user (loud, close to the mic) from
+    Auralis's own leftover echo (quieter). Cheap: 960-1920 samples.
+    """
+    try:
+        pcm = frame.to_ndarray()
+    except Exception:
+        return -100.0
+    pcm = np.asarray(pcm).reshape(-1)
+    if pcm.size == 0:
+        return -100.0
+    if np.issubdtype(pcm.dtype, np.integer):
+        x = pcm.astype(np.float32) / 32768.0
+    else:
+        x = pcm.astype(np.float32, copy=False)
+    rms = float(np.sqrt(np.mean(x * x)))
+    return 20.0 * np.log10(rms) if rms > 1e-9 else -100.0
+
 
 # Force-finish very long segments so Whisper never gets a huge job.
 # 750 frames = 15 s.
@@ -153,6 +176,7 @@ class AudioProcessor:
 
         is_speech = self.vad.process(frame)
         voiced = self._is_voiced()
+        level_db = frame_level_db(frame)
 
         segment_started = False
         segment_finished = False
@@ -239,6 +263,9 @@ class AudioProcessor:
             # Week 4 Day 2: real-voice frames so far in the open segment
             # (used for barge-in: is the user really talking over Auralis?)
             "voiced_frames": self.voiced_frames if self.speech_segment.active else 0,
+            # Week 4 (loudness gate): this frame's VAD verdict and level
+            "voiced": voiced,
+            "level_db": round(level_db, 1),
             "segment_started": segment_started,
             "segment_finished": segment_finished,
             # True when the segment was too short and was dropped.

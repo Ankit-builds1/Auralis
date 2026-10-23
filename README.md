@@ -39,7 +39,7 @@ Browser mic ──WebRTC (Opus/UDP)──► POST /webrtc/offer → aiortc RTCPe
                        AudioProcessor  (fast, every frame)
                          ├─ Silero VAD   48→16 kHz, 512-sample chunks
                          ├─ Segmenter    pre-roll · hangover · min-voice filter
-                         └─ Barge-in     user talks over Auralis ≥ 400 ms → interrupt  (Week 4)
+                         └─ Barge-in     user talks over Auralis (loudness-gated) → interrupt  (Week 4)
                                             │ segment finished
                                             ▼
                 Background "turn" task (never blocks the frame loop)
@@ -72,7 +72,8 @@ Signalling is one HTTP exchange (offer → answer). After that, audio both ways 
 | Safety | Self-harm phrases override the emotion hint: Auralis responds with care, asks if the user is safe and gives the Tele-MANAS helpline (14416) |
 | Text-to-Speech | **Piper** `en_US-lessac-medium`, spoken **sentence by sentence** (first piece may end at a comma), voice style from the emotion: upset → **calm**, low → **soft**, okay → **normal** |
 | Echo guard | Speech that starts while Auralis is talking is first treated as its own echo |
-| **Barge-in (Week 4)** | If that speech has **≥ 20 real-voice frames (400 ms)**, it is the user: LLM + TTS cancelled, queued audio dropped, `interrupted` event sent, the new question answered. The frontend STOP button sends `{"type": "interrupt"}` |
+| **Barge-in (Week 4)** | If that speech is really the user, Auralis stops: LLM + TTS cancelled, queued audio dropped, `interrupted` event sent, the new question answered. The frontend STOP button sends `{"type": "interrupt"}` |
+| **Relative loudness gate (Week 4)** | Auralis learns the user's normal speaking level from their own speech; while it talks, only voiced frames at most **5 dB** below that level count, and **10** of them (200 ms) trigger barge-in. Before the level is known: 20 voiced frames (400 ms). Based on the ML branch finding that Silero VAD also calls speaker echo "speech" |
 | Latency metrics | Per-turn breakdown (`stt_ms`, `ttft_ms`, `first_piece_ms`, `ttfa_ms`, …) sent live and appended to `logs/latency.csv` |
 | CORS | Allowed origins: `localhost:5173` / `5174` |
 
@@ -95,7 +96,7 @@ Signalling is one HTTP exchange (offer → answer). After that, audio both ways 
 | `tts_end` | `sentences, audio_ms, ttfa_ms, style, underruns` | Playback finished |
 | `turn_metrics` | `stt_ms, emotion_ms, ttft_ms, first_piece_ms, ttfa_ms, first_synth_ms, total_ms, audio_ms, pieces, voice` | One per turn |
 | `echo_ignored` | — | Short sound while Auralis spoke, ignored |
-| **`interrupted`** | **`reason` (`barge_in` \| `manual`), `stop_ms`, `spoken_ms`, `dropped_ms`** | **Auralis was stopped (Week 4)** |
+| **`interrupted`** | **`reason` (`barge_in` \| `manual`), `stop_ms`, `spoken_ms`, `dropped_ms`, `gate_db`, `user_level_db`** | **Auralis was stopped (Week 4)** |
 | `llm_error` / `tts_error` / `audio_error` | `error` | Failures |
 
 **Browser → backend**
@@ -157,7 +158,8 @@ The 800 ms target is not reached yet: ~0.7 s is the deliberate end-of-speech win
 
 | Item | Result |
 |---|---|
-| Live barge-in (7 interruptions) | Auralis stops **~380 ms** after the user starts talking and answers the new question; STOP button: **0 ms** |
+| Live barge-in (7 interruptions, frame rule) | Auralis stops **~380 ms** after the user starts talking and answers the new question; STOP button: **0 ms** |
+| Relative loudness gate (simulation: user −30 dBFS, echo −50 dBFS) | Old rule: the echo stopped Auralis **twice**; with the gate the echo is ignored and the real user stops Auralis in **~190 ms** |
 | Self-interruptions from echo | **0** in the live test (browser echo cancellation on) |
 | ML evaluation (`ml/src/bargein/eval_barge_in.py`, ML branch) | Silero VAD also calls speaker echo "speech", so frame counting alone cannot separate echo from the user; a **loudness gate** + 10 frames gave 98 % detection and 0 % false triggers in simulation → next step: a gate relative to the user's own speech level |
 | Emotion fix | Plain questions ("Tell me about AI") no longer show up as "sad": clearly neutral words need a very sure voice to override them |
@@ -212,6 +214,14 @@ python -m app.main
 ```
 
 Wait for `[STARTUP] Ready`. Check `http://localhost:8001/health`.
+
+**Where does the time go?** After a few turns:
+
+```bash
+python tools/latency_report.py --last 20
+```
+
+prints median / p95 for every stage (Whisper, Llama, first phrase, Piper) from `logs/latency.csv`, so a setting change (`VAD_SILENCE_MS`, `WHISPER_BEAM_SIZE`, …) can be measured.
 
 For a frontend on another network: `ngrok http 8001` and use that URL (no trailing `/`) as `VITE_BACKEND_URL`.
 
@@ -270,6 +280,8 @@ Silero VAD with tuned end-of-speech, segmentation, Faster-Whisper `base.en` with
 - STOP AURALIS button (`interrupt` message from the browser), `interrupted` event
 - Cut-off replies kept in the conversation history as "[interrupted by the user]"
 - Fusion fix: plain neutral questions stay neutral
+- **Relative loudness gate** for barge-in (from the ML W4D1 evaluation): echo no longer stops Auralis, real interruptions are detected in ~200 ms
+- **Latency sprint**: shorter first sentence in the prompt (Auralis starts speaking sooner), `VAD_SILENCE_MS` setting, `tools/latency_report.py`
 - Fixed `requirements.txt` (transformers, scikit-learn, joblib, piper-tts, librosa, scipy, soundfile), full `.env.example`, safer `.gitignore`
 
 ---
@@ -279,7 +291,7 @@ Silero VAD with tuned end-of-speech, segmentation, Faster-Whisper `base.en` with
 - **Latency above the 800 ms target:** ~2.7 s to the first audio with GPU Whisper on a 4 GB laptop GPU, ~7–8 s on CPU only
 - **Voice-only emotion is weak on real speakers** (~50 %); the words carry most of the signal, so fusion is essential
 - **Whisper `base.en`** mishears some terms with our accent (e.g. "AI" → "A.A.")
-- **Barge-in relies on browser echo cancellation**; without headphones, loud speakers can make Auralis stop on its own echo (a relative loudness gate is the next step)
+- **Barge-in**: the loudness gate needs ~1 s of the user's speech to learn their level; a user who interrupts much more quietly than they normally speak may not stop Auralis
 - Piper changes speed / pitch / volume only; XTTS-v2 carried more emotion in tests but needs a GPU and is not deployed
 - Free ngrok URLs change on every restart
 
@@ -315,7 +327,7 @@ Backend/
 │   │   ├── audio_track.py          # frame loop, turns (STT + emotion → LLM → TTS), barge-in
 │   │   └── tts_track.py            # outgoing audio track, real-time pacing, clear() for barge-in
 │   ├── audio/
-│   │   ├── processor.py            # VAD + segmentation (+ voiced-frame count for barge-in)
+│   │   ├── processor.py            # VAD + segmentation (+ voiced flag and frame level for barge-in)
 │   │   ├── vad/detector.py         # Silero VAD
 │   │   ├── segments/ pcm/ metrics/
 │   ├── stt/
@@ -328,6 +340,7 @@ Backend/
 │       └── text_emotion.py         # text emotion + fusion
 ├── models/                         # .joblib + Piper voice (NOT in git)
 ├── logs/latency.csv                # per-turn latency (NOT in git)
+├── tools/latency_report.py         # median / p95 per stage from logs/latency.csv
 ├── tests/
 ├── requirements.txt
 ├── .env.example

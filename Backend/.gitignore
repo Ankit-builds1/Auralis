@@ -13,5 +13,11 @@ models/tts/
 
 *.wav
 
-*.wav
 logs/
+
+# Week 4: keep local-only files out of git
+venv/
+*.onnx
+*.onnx.json
+*.bak
+hf-cache/

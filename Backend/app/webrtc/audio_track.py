@@ -2,7 +2,9 @@
 import csv
 import json
 import os
+import statistics
 import time
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 
@@ -35,6 +37,21 @@ ECHO_TAIL_S = 0.4
 # Headphones make barge-in most reliable (no Auralis voice in the mic).
 BARGE_IN = os.getenv("BARGE_IN", "1") == "1"
 BARGE_IN_MIN_VOICED_FRAMES = int(os.getenv("BARGE_IN_MIN_VOICED_FRAMES", "20"))
+
+# Week 4 (ML W4D1 finding, ml/results/week4_bargein): Silero VAD also calls
+# Auralis's leftover speaker echo "speech", so counting frames alone cannot
+# tell echo from the user. The echo is QUIETER. So, once Auralis has heard
+# the user's normal speaking level, a frame only counts for barge-in when it
+# is at most BARGE_IN_GATE_DB below that level (relative gate, works on any
+# mic). With the gate, fewer frames are needed (10 x 20 ms = 200 ms of loud
+# voice; ML eval: 98 % detection, 0 % false triggers on simulated echo).
+#   BARGE_IN_GATE_DB=5         dB below the user's level still counted (0 = off)
+#   BARGE_IN_GATED_FRAMES=10   loud voiced frames needed when the gate is on
+# Until ~1 s of the user's speech has been heard, the plain rule above is used.
+BARGE_IN_GATE_DB = float(os.getenv("BARGE_IN_GATE_DB", "5"))
+BARGE_IN_GATED_FRAMES = int(os.getenv("BARGE_IN_GATED_FRAMES", "10"))
+USER_LEVEL_MIN_FRAMES = 50          # voiced frames needed to trust the level
+USER_LEVEL_HISTORY = 1500           # ~30 s of the user's voiced frames
 
 # Week 3 Day 4: every turn's latency breakdown is appended to this CSV
 # (for p50/p95 numbers in the report). Set LATENCY_LOG=0 to turn off.
@@ -96,7 +113,8 @@ class IncomingAudioTrack:
                       one latency breakdown per turn (Week 3 Day 4)
         tts_error     {error}
         echo_ignored  {}   speech heard while Auralis was talking
-        interrupted   {reason, stop_ms, spoken_ms, dropped_ms}   Week 4 Day 2
+        interrupted   {reason, stop_ms, spoken_ms, dropped_ms,
+                       gate_db, user_level_db}                  Week 4
                       reason "barge_in" = user talked over Auralis,
                              "manual"   = STOP AURALIS button
                       stop_ms = user speech start (or click) -> Auralis stopped
@@ -144,6 +162,11 @@ class IncomingAudioTrack:
         self.in_segment = False
         self.segment_started_at = 0.0
         self.segment_barged = False
+
+        # ---- Week 4: relative loudness gate ----
+        self.user_levels = deque(maxlen=USER_LEVEL_HISTORY)  # dBFS of user voiced frames
+        self.user_level_db = None        # median of user_levels (once trusted)
+        self.segment_loud_frames = 0     # voiced frames above the gate, this segment
 
         if self.tts_track is not None:
             # TTSAudioTrack calls this with "started" / "finished"
@@ -278,6 +301,8 @@ class IncomingAudioTrack:
             "stop_ms": stop_ms,
             "spoken_ms": spoken_ms,
             "dropped_ms": dropped_ms,
+            "gate_db": self._gate_db(),
+            "user_level_db": self.user_level_db,
         })
         return True
 
@@ -288,6 +313,34 @@ class IncomingAudioTrack:
             return
         if self.running:
             self._idle_or_speaking()
+
+    def _gate_db(self):
+        """Level a frame must reach to count for barge-in, or None (gate off)."""
+        if BARGE_IN_GATE_DB <= 0 or self.user_level_db is None:
+            return None
+        return self.user_level_db - BARGE_IN_GATE_DB
+
+    def _track_levels(self, metadata):
+        """
+        Every frame of an open segment:
+          - learn the user's normal level from their own speech (only while
+            Auralis is silent, so no echo gets mixed in)
+          - count loud voiced frames for the barge-in gate
+        """
+        if not self.in_segment or not metadata.get("voiced"):
+            return
+        level = metadata.get("level_db")
+        if level is None:
+            return
+
+        if not self.segment_is_echo and not self.ai_speaking:
+            self.user_levels.append(level)
+            if len(self.user_levels) >= USER_LEVEL_MIN_FRAMES and len(self.user_levels) % 25 == 0:
+                self.user_level_db = round(statistics.median(self.user_levels), 1)
+
+        gate = self._gate_db()
+        if gate is not None and level >= gate:
+            self.segment_loud_frames += 1
 
     def _check_barge_in(self, metadata):
         """
@@ -302,10 +355,20 @@ class IncomingAudioTrack:
         if not (self.segment_is_echo or self.reply_active):
             return
 
-        if metadata.get("voiced_frames", 0) < BARGE_IN_MIN_VOICED_FRAMES:
-            return
+        gate = self._gate_db()
+        if gate is not None:
+            # Week 4: loud voiced frames only (echo is quieter than the user)
+            if self.segment_loud_frames < BARGE_IN_GATED_FRAMES:
+                return
+            rule = (f"{self.segment_loud_frames} frames >= {gate:.1f} dBFS "
+                    f"(user level {self.user_level_db:.1f} dBFS)")
+        else:
+            if metadata.get("voiced_frames", 0) < BARGE_IN_MIN_VOICED_FRAMES:
+                return
+            rule = f"{metadata.get('voiced_frames', 0)} voiced frames (no gate yet)"
 
         self.segment_barged = True
+        print(f"[BARGE-IN] Trigger: {rule}")
         self._interrupt("barge_in", since=self.segment_started_at)
 
         # The user is really talking: this segment becomes a normal turn
@@ -363,6 +426,10 @@ class IncomingAudioTrack:
                     self.in_segment = True
                     self.segment_started_at = time.perf_counter()
                     self.segment_barged = False
+                    self.segment_loud_frames = 0
+
+                # Week 4: learn the user's level + count loud frames
+                self._track_levels(metadata)
 
                 # Week 4 Day 2: user talking over Auralis -> stop Auralis
                 self._check_barge_in(metadata)
