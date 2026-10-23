@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from aiohttp import web
 from aiortc import RTCSessionDescription
@@ -94,6 +95,22 @@ async def offer(request):
                 asyncio.create_task(
                     play_test_tone(tts_track)
                 )
+
+        # Week 4 Day 2: messages FROM the browser.
+        # {"type": "interrupt"} = STOP AURALIS button
+        @channel.on("message")
+        def on_message(message):
+
+            try:
+                data = json.loads(message)
+            except (TypeError, ValueError):
+                return
+
+            if not isinstance(data, dict):
+                return
+
+            if data.get("type") == "interrupt" and audio_processor is not None:
+                audio_processor.request_interrupt("manual")
 
         @channel.on("close")
         def on_close():

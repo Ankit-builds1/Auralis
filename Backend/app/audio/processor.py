@@ -236,6 +236,9 @@ class AudioProcessor:
             "samples": getattr(frame, "samples", None),
             "pts": getattr(frame, "pts", None),
             "is_speech": is_speech,
+            # Week 4 Day 2: real-voice frames so far in the open segment
+            # (used for barge-in: is the user really talking over Auralis?)
+            "voiced_frames": self.voiced_frames if self.speech_segment.active else 0,
             "segment_started": segment_started,
             "segment_finished": segment_finished,
             # True when the segment was too short and was dropped.

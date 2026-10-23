@@ -86,6 +86,20 @@ class TTSAudioTrack(MediaStreamTrack):
         with self._lock:
             self._clip_open = False
 
+    def clear(self):
+        """
+        Week 4 Day 2 (barge-in): drop everything that has not been sent yet.
+        Returns how many ms of queued audio were thrown away.
+        The next recv() sees an empty, closed clip and reports "finished".
+        """
+
+        with self._lock:
+            dropped_ms = round(len(self._buffer) / SAMPLE_RATE * 1000)
+            self._buffer = np.zeros(0, dtype=np.int16)
+            self._clip_open = False
+
+        return dropped_ms
+
     # ------------------------------------------------------
     # CONSUMER SIDE (called by aiortc every 20 ms)
     # ------------------------------------------------------

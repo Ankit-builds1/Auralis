@@ -26,6 +26,16 @@ HISTORY_MESSAGES = 6
 # through the speakers, and is ignored.
 ECHO_TAIL_S = 0.4
 
+# Week 4 Day 2: BARGE-IN (full duplex). If the user keeps talking while
+# Auralis is speaking (or writing its reply), Auralis stops at once and
+# answers the NEW question instead.
+#   BARGE_IN=0                     turn it off (old behaviour: ignore as echo)
+#   BARGE_IN_MIN_VOICED_FRAMES=20  real-voice frames needed (20 x 20 ms = 400 ms)
+#                                  higher = fewer false stops from speaker echo
+# Headphones make barge-in most reliable (no Auralis voice in the mic).
+BARGE_IN = os.getenv("BARGE_IN", "1") == "1"
+BARGE_IN_MIN_VOICED_FRAMES = int(os.getenv("BARGE_IN_MIN_VOICED_FRAMES", "20"))
+
 # Week 3 Day 4: every turn's latency breakdown is appended to this CSV
 # (for p50/p95 numbers in the report). Set LATENCY_LOG=0 to turn off.
 LATENCY_LOG = os.getenv("LATENCY_LOG", "1") == "1"
@@ -86,6 +96,13 @@ class IncomingAudioTrack:
                       one latency breakdown per turn (Week 3 Day 4)
         tts_error     {error}
         echo_ignored  {}   speech heard while Auralis was talking
+        interrupted   {reason, stop_ms, spoken_ms, dropped_ms}   Week 4 Day 2
+                      reason "barge_in" = user talked over Auralis,
+                             "manual"   = STOP AURALIS button
+                      stop_ms = user speech start (or click) -> Auralis stopped
+
+    DataChannel messages received from the frontend (server.py):
+        interrupt     {}   STOP AURALIS button -> request_interrupt("manual")
         llm_error     {error}
         audio_error   {frame, error}
 
@@ -120,6 +137,13 @@ class IncomingAudioTrack:
         self.ai_finished_at = 0.0
         self.segment_is_echo = False
         self.tts_stats = None
+
+        # ---- Week 4 Day 2: barge-in ----
+        self.reply_active = False      # LLM reply (text and/or voice) in progress
+        self.ai_started_at = 0.0       # when Auralis's current audio started
+        self.in_segment = False
+        self.segment_started_at = 0.0
+        self.segment_barged = False
 
         if self.tts_track is not None:
             # TTSAudioTrack calls this with "started" / "finished"
@@ -179,6 +203,7 @@ class IncomingAudioTrack:
         """Called by TTSAudioTrack when playback starts / ends."""
         if event == "started":
             self.ai_speaking = True
+            self.ai_started_at = time.perf_counter()
             self._send_vad("ai_speaking")
 
         elif event == "finished":
@@ -203,6 +228,95 @@ class IncomingAudioTrack:
 
             if self.running:
                 self._idle_or_speaking()
+
+    # ==========================================================
+    # Week 4 Day 2: interruption (barge-in)
+    # ==========================================================
+
+    def _interrupt(self, reason, since=None):
+        """
+        Stop the current reply right now: cancel the LLM + TTS task, drop the
+        audio that is still queued, and tell the frontend.
+        Returns False when there was nothing to stop.
+        """
+        if not (self.ai_speaking or self.reply_active):
+            return False
+
+        now = time.perf_counter()
+        spoken_ms = round((now - self.ai_started_at) * 1000) if self.ai_speaking else 0
+
+        # Reply already fully written but only partly spoken: the history
+        # should show the user did not hear all of it
+        if (not self.reply_active and self.history
+                and self.history[-1]["role"] == "assistant"
+                and not self.history[-1]["content"].endswith("[interrupted by the user]")):
+            self.history[-1] = {
+                "role": "assistant",
+                "content": self.history[-1]["content"] + " ... [interrupted by the user]",
+            }
+
+        # Cancels the running turn (Ollama stream + Piper) and any stale
+        # turns still waiting for the lock
+        self._cancel_turns()
+
+        dropped_ms = self.tts_track.clear() if self.tts_track is not None else 0
+
+        self.reply_active = False
+        self.ai_speaking = False
+        self.ai_finished_at = now
+
+        stop_ms = round((now - since) * 1000) if since else 0
+
+        print(
+            f"[BARGE-IN] Auralis interrupted ({reason}): stopped {stop_ms} ms after "
+            f"{'speech start' if reason == 'barge_in' else 'click'}, "
+            f"{spoken_ms} ms spoken, {dropped_ms} ms of queued audio dropped"
+        )
+        self.send_event({
+            "type": "interrupted",
+            "reason": reason,
+            "stop_ms": stop_ms,
+            "spoken_ms": spoken_ms,
+            "dropped_ms": dropped_ms,
+        })
+        return True
+
+    def request_interrupt(self, reason="manual"):
+        """Called from server.py when the browser sends {"type": "interrupt"}."""
+        if not self._interrupt(reason, since=time.perf_counter()):
+            print(f"[BARGE-IN] Interrupt ({reason}) ignored - Auralis was not replying")
+            return
+        if self.running:
+            self._idle_or_speaking()
+
+    def _check_barge_in(self, metadata):
+        """
+        Runs on every frame while a speech segment is open. The segment is a
+        barge-in candidate when it started while Auralis was talking (echo
+        guard) or while a reply was being written. Once enough REAL voice
+        frames arrive, it is the user talking over Auralis, not echo.
+        """
+        if not BARGE_IN or self.segment_barged or not self.in_segment:
+            return
+
+        if not (self.segment_is_echo or self.reply_active):
+            return
+
+        if metadata.get("voiced_frames", 0) < BARGE_IN_MIN_VOICED_FRAMES:
+            return
+
+        self.segment_barged = True
+        self._interrupt("barge_in", since=self.segment_started_at)
+
+        # The user is really talking: this segment becomes a normal turn
+        # (transcribed + answered when it ends), even if Auralis had
+        # already finished on its own during the echo tail.
+        if self.segment_is_echo:
+            self.segment_is_echo = False
+            print(f"[BARGE-IN] Speech while Auralis was talking is the user "
+                  f"(frame={self.frame_count}) - will be answered")
+        self.user_speaking = True
+        self._send_vad("speaking")
 
     # ==========================================================
     # Frame loop
@@ -246,6 +360,12 @@ class IncomingAudioTrack:
                 # Decide once, at the start of a segment, whether it is echo
                 if metadata["segment_started"]:
                     self.segment_is_echo = self._ai_busy()
+                    self.in_segment = True
+                    self.segment_started_at = time.perf_counter()
+                    self.segment_barged = False
+
+                # Week 4 Day 2: user talking over Auralis -> stop Auralis
+                self._check_barge_in(metadata)
 
                 is_echo = self.segment_is_echo
 
@@ -274,6 +394,7 @@ class IncomingAudioTrack:
 
                 if metadata["segment_finished"]:
                     self.segment_is_echo = False
+                    self.in_segment = False
 
                     if is_echo:
                         print("[ECHO] Segment ignored (Auralis was speaking)")
@@ -430,6 +551,7 @@ class IncomingAudioTrack:
                 self.send_event({"type": "llm_error", "error": str(exc)})
 
             finally:
+                self.reply_active = False
                 self.pending_turns = max(0, self.pending_turns - 1)
                 if self.running:
                     self._idle_or_speaking()
@@ -456,6 +578,7 @@ class IncomingAudioTrack:
                 self._speak_sentences(sentence_queue, voice_group, speech_end_time)
             )
 
+        self.reply_active = True
         self.send_event({"type": "llm_start"})
 
         reply_parts = []
@@ -491,6 +614,16 @@ class IncomingAudioTrack:
         except asyncio.CancelledError:
             if speak_task is not None:
                 speak_task.cancel()
+            # Week 4 Day 2: keep the cut-off exchange so Auralis knows what
+            # it was saying when the user interrupted
+            partial = "".join(reply_parts).strip()
+            if partial:
+                self.history.append({"role": "user", "content": transcript})
+                self.history.append({
+                    "role": "assistant",
+                    "content": partial + " ... [interrupted by the user]",
+                })
+                self.history = self.history[-HISTORY_MESSAGES:]
             raise
 
         finally:
