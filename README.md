@@ -179,6 +179,73 @@ The project plan asks for a zero-shot TTS conditioned on an emotional baseline (
 
 ---
 
+## Week 4 — interruption handling + accuracy
+
+PROJECT.pdf, Week 4 (Audio ML): *"Interruption Handling: implement full-duplex communication. If the AI is speaking and the human interrupts, the backend must instantly halt the TTS generation and listen."* The backend implements the stop; this module measured **how to tell a real interruption from Auralis's own echo**, and fixed the emotion and speech-to-text weaknesses found in live tests.
+
+### Week 4 results at a glance
+
+| Question | Answer |
+|---|---|
+| Can frame counting alone separate the user from Auralis's echo? | **No.** Silero VAD calls the echo "speech" too (N=20 frames: 100 % false triggers at −20 dB echo) |
+| What separates them? | **Loudness.** Echo is quieter. A gate 5 dB below the user's level + 10 frames: **98 % detection, 0 % false triggers** (simulation) |
+| Does it work live? | Yes: backend learns the user's level (≈ −22 dBFS), Auralis stops in **~200–450 ms**, **0** self-interruptions |
+| Why did plain questions show "happy" / "sad"? | The voice model hears each person's normal voice as an emotion. **Personal baseline + balanced fusion: 4/9 → 7/9** correct on the live test turns |
+| Is Whisper fast enough (PDF Week 1: < 200 ms)? | `base.en` median **129 ms** (97 % of clips < 200 ms) on the RTX 2050 |
+| Is a bigger Whisper more accurate on our voices? | `small.en` **68.4 %** word accuracy vs `base.en` **59.9 %** (live); `distil-small.en` **66.3 %** at 195 ms |
+
+### Day 1 — Barge-in threshold evaluation (Priya)
+
+`src/bargein/eval_barge_in.py` → `results/week4_bargein/`
+
+- **Real user speech:** our 60 recorded clips. **Echo:** 30 Auralis replies synthesised with the same Piper voice + styles as the backend, scaled to the user's speech level, then lowered by −10/−15/−20/−25 dB (leftover after browser echo cancellation) with a 20–40 ms room reflection and light noise.
+- Same Silero VAD settings as the backend (threshold 0.5, 3 start / 22 end chunks), fed in 20 ms frames; thresholds N = 10…40 frames, with and without a loudness gate.
+
+| Rule | Detection (real user) | Mean time to detect | False triggers on echo (−20 dB) |
+|---|---|---|---|
+| N = 20 frames, no gate (first backend version) | 100 % | 478 ms | **100 %** |
+| N = 20, echo at −25 dB | 100 % | 478 ms | 22 % |
+| **N = 10 + gate −42 dBFS (5 dB below the user)** | **98.3 %** | **476 ms** | **0 %** (also 0 % at −15 dB) |
+
+**Finding:** counting voiced frames cannot separate echo from the user; loudness can. The backend therefore uses a **relative** gate (user level − 5 dB, learned live) instead of a fixed −42 dBFS, because the live browser level differs from the script recordings. Note: N = 10 is only safe **together with** the gate.
+
+### Day 2 — Emotion fix: personal voice baseline + balanced fusion
+
+Live test (23 Oct): plain questions such as "What is the capital of India?" came out **happy 91–94 %** and "Tell me a joke" **sad 84 %** from the voice, while the words were clearly neutral.
+
+1. **Personal baseline:** on turns whose words are clearly neutral, the backend learns how the model hears *this* user's normal voice, then re-weights each turn: `calibrated[k] ∝ voice[k] / baseline[k]^0.7`. A turn that sounds like the user's usual voice becomes flat (→ neutral); a real change stands out.
+2. **Balanced fusion for neutral words:** clearly neutral words (≥ 75 %) now get 0.5 text / 0.5 voice (was 0.4 / 0.6), so the voice must be ~90 %+ sure to override them.
+3. **Voice-only "disgust"** must be ≥ 90 % sure (over-predicted on our voices).
+
+| Setup (9 live test turns) | Correct emotion |
+|---|---|
+| Before (live backend) | 4 / 9 |
+| Personal baseline only | 6 / 9 |
+| Balanced fusion only | 7 / 9 |
+| **Both (deployed)** | **7 / 9** |
+
+Remaining errors: the very first turn (no baseline yet) and "Tell me a joke" (voice sad 84 %, words happy 58 %, just under the 60 % rule).
+
+### Day 3 — Whisper benchmark on our voices
+
+`src/stt/whisper_benchmark.py` → `results/week4_stt/` (120 clips, Ankit + Priya, RTX 2050, float16, same `initial_prompt` as the backend)
+
+| Model | Beam | Word accuracy (100 − WER) | Exact sentence | Median | p95 | < 200 ms |
+|---|---|---|---|---|---|---|
+| **small.en** | 5 | **68.4 %** | 30.8 % | 270 ms | 322 ms | 0 % |
+| small.en | 1 | 67.2 % | 27.5 % | 222 ms | 246 ms | 13 % |
+| **distil-small.en** | 5 | **66.3 %** | 26.7 % | 195 ms | 230 ms | 69 % |
+| distil-small.en | 1 | 62.3 % | 25.0 % | 160 ms | 205 ms | 94 % |
+| base.en (live) | 5 | 59.9 % | 24.2 % | **129 ms** | 164 ms | **97 %** |
+| base.en | 1 | 56.6 % | 20.0 % | 91 ms | 449 ms | 93 % |
+| tiny.en | 1 | 46.0 % | 18.3 % | 62 ms | 494 ms | 88 % |
+
+- **PDF Week 1 target (< 200 ms) is met** by `base.en` (median 129 ms).
+- `distil-small.en` (beam 5) is the best trade-off: **+6.4 points** accuracy for +66 ms. Backend: `WHISPER_MODEL=distil-small.en`.
+- Absolute accuracy is low because these are **acted emotion clips** (shouting, crying) cut at **4 s**, so some sentences end before the speaker finishes. Normal conversation is transcribed much better; the table is for comparing models.
+
+---
+
 ## Earlier work (Weeks 1–2, Siddhant)
 
 | Experiment | Features | Model | Val acc | Test acc | Test macro-F1 |
@@ -246,6 +313,18 @@ python -m src.tts.xtts_emotion_test --speaker <name>
 python -m src.tts.score_tts_emotion
 ```
 
+### Reproduce Week 4
+
+```powershell
+# Day 1: barge-in thresholds (needs piper-tts + silero-vad and the Piper voice in models/tts/)
+python -m src.bargein.eval_barge_in
+
+# Day 3: Whisper benchmark (run with the backend venv: it has faster-whisper + CUDA libs)
+& "..\..\Auralis-Backend\Backend\venv\Scripts\python.exe" -m src.stt.whisper_benchmark
+```
+
+Day 2 (personal baseline + fusion) lives in the backend: `Backend/app/webrtc/audio_track.py` and `Backend/app/ml_clients/text_emotion.py`.
+
 ---
 
 ## Project Structure
@@ -263,11 +342,15 @@ ml/
 │   ├── week3_adapt/              # speaker adaptation
 │   ├── week3_multi/              # multi-corpus + leave-one-corpus-out
 │   ├── week3_fusion/             # text model + fusion cases
-│   └── week3_tts/                # Piper/Kokoro benchmark, XTTS benchmark + emotion scores
+│   ├── week3_tts/                # Piper/Kokoro benchmark, XTTS benchmark + emotion scores
+│   ├── week4_bargein/            # barge-in thresholds + trade-off plot
+│   └── week4_stt/                # Whisper benchmark
 ├── src/
 │   ├── data/                     # metadata, splits, voice recorder
 │   ├── features/                 # MFCC/prosodic (Wk 1–2), WavLM embeddings, corpora (Wk 3)
 │   ├── models/                   # SVMs (Wk 1–2), WavLM classifier, adaptation, multi-corpus, text emotion
+│   ├── bargein/                  # barge-in threshold evaluation (Week 4)
+│   ├── stt/                      # Whisper benchmark (Week 4)
 │   ├── tts/                      # TTS benchmark, voice styles, XTTS test + scoring
 │   ├── llm/                      # persona prompt + streaming Ollama client
 │   └── pipeline.py               # audio + transcript → emotion → reply (Week 2)
@@ -284,11 +367,16 @@ ml/
 
 **Week 3 ✅** Piper chosen (Day 1) · WavLM-Large 74.6 % (Day 2) · speaker adaptation 19 % → 53 % on our voices (Day 3) · multi-corpus + leave-one-corpus-out (Day 4) · text emotion + fusion, live 29 % → 71 % (Day 5) · XTTS-v2 emotional TTS study (Day 6) · this report (Day 7)
 
-**Week 4 (planned)** Interruption handling (barge-in) support, XTTS reference-voice and speed experiment, more speakers for adaptation
+**Week 4 ✅** Barge-in threshold evaluation: echo vs user, loudness gate (Day 1) · personal voice baseline + balanced fusion, live 4/9 → 7/9 (Day 2) · Whisper benchmark: small.en 68.4 % vs base.en 59.9 %, base.en 129 ms (Day 3) · this report
+
+**Future work** Record training clips through the live browser path and re-adapt · try `emotion2vec+` · more speakers · XTTS as the live voice (GPU) · Hindi / Odia
 
 ---
 
 ## Known Limitations
+
+- **Barge-in gate** was tuned in simulation on one speaker; it needs ~1 s of the user's speech to learn their level.
+- **Whisper benchmark** uses short acted clips; accuracy in normal conversation is higher.
 
 - **Voice-only emotion on real speakers is ~50–55 %** (6 classes). The words carry most of the signal in live use, so fusion is essential.
 - **Small private test set:** 36 held-out clips from 2 speakers; one clip ≈ 2.8 %. Numbers are indicative.
