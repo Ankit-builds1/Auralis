@@ -1,4 +1,5 @@
 ﻿import asyncio
+import os
 import shutil
 import subprocess
 
@@ -92,18 +93,20 @@ def create_app():
 
     cors = aiohttp_cors.setup(app)
 
+    # Deployment: browser origins allowed to call the backend.
+    # Local dev ports are always allowed; add the Vercel URL(s) in .env:
+    #   CORS_ORIGINS=https://auralis.vercel.app,https://other.vercel.app
+    origins = ["http://localhost:5173", "http://localhost:5174"]
+    origins += [o.strip().rstrip("/") for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
     cors_config = {
-        "http://localhost:5173": aiohttp_cors.ResourceOptions(
+        origin: aiohttp_cors.ResourceOptions(
             allow_credentials=True,
             expose_headers="*",
             allow_headers="*",
-        ),
-        "http://localhost:5174": aiohttp_cors.ResourceOptions(
-            allow_credentials=True,
-            expose_headers="*",
-            allow_headers="*",
-        ),
+        )
+        for origin in dict.fromkeys(origins)
     }
+    print(f"[STARTUP] CORS origins: {', '.join(cors_config)}")
 
     for route in list(app.router.routes()):
         cors.add(route, cors_config)

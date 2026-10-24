@@ -1,4 +1,19 @@
+import os
+
 from aiortc import RTCPeerConnection, RTCConfiguration, RTCIceServer
+
+
+def ice_servers():
+    """STUN always; a TURN relay when TURN_URL/TURN_USERNAME/TURN_CREDENTIAL
+    are set in .env (deployment: lets browsers on other networks reach this
+    laptop). TURN_URL may hold several URLs separated by commas."""
+    servers = [RTCIceServer(urls="stun:stun.l.google.com:19302")]
+    urls = [u.strip() for u in os.getenv("TURN_URL", "").split(",") if u.strip()]
+    user = os.getenv("TURN_USERNAME", "")
+    cred = os.getenv("TURN_CREDENTIAL", "")
+    if urls and user and cred:
+        servers.append(RTCIceServer(urls=urls, username=user, credential=cred))
+    return servers
 
 
 class WebRTCConnection:
@@ -8,16 +23,7 @@ class WebRTCConnection:
 
     def __init__(self):
         self.pc = RTCPeerConnection(
-            configuration=RTCConfiguration(
-                iceServers=[
-                    RTCIceServer(urls="stun:stun.l.google.com:19302"),
-                    RTCIceServer(
-                        urls="turn:openrelay.metered.ca:80",
-                        username="openrelayproject",
-                        credential="openrelayproject"
-                    )
-                ]
-            )
+            configuration=RTCConfiguration(iceServers=ice_servers())
         )
 
         # WebRTC ICE connection state
