@@ -14,10 +14,10 @@ the emotion when the tone doesn't.
 Fusion rule:
   text top label is NOT neutral and >= TEXT_STRONG -> words decide
       final = 0.7 x text + 0.3 x voice
-  text is clearly NEUTRAL (>= TEXT_NEUTRAL_STRONG)  -> balanced (Week 4 Day 3)
-      final = 0.4 x text + 0.6 x voice
+  text is clearly NEUTRAL (>= TEXT_NEUTRAL_STRONG)  -> balanced (Week 4)
+      final = 0.5 x text + 0.5 x voice
       ("Tell me about AI" said in a flat voice stays neutral; the voice
-       needs to be ~75 %+ sure to override plainly neutral words, so a
+       needs to be ~90 %+ sure to override plainly neutral words, so a
        really angry "I'm fine" can still come through)
   otherwise -> voice decides (text only nudges)
       final = 0.2 x text + 0.8 x voice
@@ -53,7 +53,9 @@ VOICE_WEIGHTS = (0.2, 0.8)   # (text, voice) otherwise
 # Week 4 Day 3: plainly neutral words (questions, facts) should not turn
 # into "sad" just because the voice model leans that way
 TEXT_NEUTRAL_STRONG = float(os.getenv("TEXT_NEUTRAL_STRONG", "0.75"))
-NEUTRAL_WEIGHTS = (0.4, 0.6)   # (text, voice) when the words are clearly neutral
+# Live test: the voice model said "happy 91-94 %" on plain questions
+# ("What is the capital of India?"), so the voice now needs ~90 %+.
+NEUTRAL_WEIGHTS = (0.5, 0.5)   # (text, voice) when the words are clearly neutral
 MIN_WORDS = 3                # shorter transcripts ("okay", "yes") -> voice only
 
 _pipe = None

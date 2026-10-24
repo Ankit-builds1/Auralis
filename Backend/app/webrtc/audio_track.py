@@ -55,6 +55,22 @@ BARGE_IN_GATED_FRAMES = int(os.getenv("BARGE_IN_GATED_FRAMES", "10"))
 # says disgust, it must be at least this sure, otherwise it is not used.
 VOICE_DISGUST_MIN = float(os.getenv("VOICE_DISGUST_MIN", "0.9"))
 
+# Week 4 (ML): PERSONAL VOICE BASELINE. Every voice sounds a bit "happy" or
+# "sad" to the model (live: plain questions came out happy 91-94 %). Auralis
+# learns how the model hears THIS user when their words are neutral, and then
+# judges each turn by how much it DIFFERS from that personal baseline:
+#     calibrated[k] ~ voice[k] / baseline[k] ** STRENGTH   (then normalised)
+# A turn that sounds like the user's normal voice becomes flat (-> neutral);
+# a real change (e.g. much sadder than usual) stands out more.
+#   VOICE_BASELINE=0                turn off
+#   VOICE_BASELINE_TURNS=2          neutral-word turns needed before it is used
+#   VOICE_BASELINE_STRENGTH=0.7     0 = no effect, 1 = full division
+VOICE_BASELINE = os.getenv("VOICE_BASELINE", "1") == "1"
+VOICE_BASELINE_TURNS = int(os.getenv("VOICE_BASELINE_TURNS", "2"))
+VOICE_BASELINE_STRENGTH = float(os.getenv("VOICE_BASELINE_STRENGTH", "0.7"))
+VOICE_BASELINE_ALPHA = 0.3         # how fast the baseline follows new neutral turns
+VOICE_BASELINE_FLOOR = 0.05        # never divide by (almost) zero
+
 USER_LEVEL_MIN_FRAMES = 50          # voiced frames needed to trust the level
 USER_LEVEL_HISTORY = 1500           # ~30 s of the user's voiced frames
 
@@ -185,6 +201,10 @@ class IncomingAudioTrack:
         self.user_levels = deque(maxlen=USER_LEVEL_HISTORY)  # dBFS of user voiced frames
         self.user_level_db = None        # median of user_levels (once trusted)
         self.segment_loud_frames = 0     # voiced frames above the gate, this segment
+
+        # ---- Week 4 (ML): personal voice-emotion baseline ----
+        self.voice_baseline = None       # {label: avg prob} on neutral-word turns
+        self.voice_baseline_turns = 0
 
         if self.tts_track is not None:
             # TTSAudioTrack calls this with "started" / "finished"
@@ -532,12 +552,66 @@ class IncomingAudioTrack:
             print(f"[EMOTION ERROR] {type(exc).__name__}: {exc}")
             return None
 
+    # ==========================================================
+    # Week 4 (ML): personal voice baseline
+    # ==========================================================
+
+    def _calibrate_voice(self, emotion):
+        """Re-weight the voice probabilities by the user's own baseline."""
+        if (not VOICE_BASELINE or self.voice_baseline is None
+                or self.voice_baseline_turns < VOICE_BASELINE_TURNS
+                or not emotion.get("probs")):
+            emotion["calibrated"] = False
+            return emotion
+
+        raw = emotion["probs"]
+        weights = {
+            k: raw[k] / max(self.voice_baseline.get(k, 0.0), VOICE_BASELINE_FLOOR) ** VOICE_BASELINE_STRENGTH
+            for k in raw
+        }
+        total = sum(weights.values()) or 1.0
+        probs = {k: round(v / total, 3) for k, v in weights.items()}
+        label = max(probs, key=probs.get)
+        confidence = probs[label]
+        confident = confidence >= emotion_engine.MIN_CONFIDENCE
+        group = emotion_engine.GROUPS.get(label, "okay") if confident else "okay"
+
+        print(f"[EMOTION] baseline: raw {emotion['label']} ({emotion['confidence']:.2f}) "
+              f"-> calibrated {label} ({confidence:.2f})")
+        emotion.update(
+            raw_label=emotion["label"], raw_confidence=emotion["confidence"], raw_probs=raw,
+            label=label, confidence=round(confidence, 3), confident=confident,
+            group=group, hint=emotion_engine.LLM_HINTS[group], probs=probs,
+            calibrated=True,
+        )
+        return emotion
+
+    def _learn_baseline(self, raw_probs):
+        """Neutral words = the user's normal voice -> update the baseline."""
+        if not VOICE_BASELINE or not raw_probs:
+            return
+        if self.voice_baseline is None:
+            self.voice_baseline = dict(raw_probs)
+        else:
+            a = VOICE_BASELINE_ALPHA
+            self.voice_baseline = {
+                k: (1 - a) * self.voice_baseline.get(k, 0.0) + a * raw_probs.get(k, 0.0)
+                for k in raw_probs
+            }
+        self.voice_baseline_turns += 1
+        top = max(self.voice_baseline, key=self.voice_baseline.get)
+        print(f"[EMOTION] baseline updated from {self.voice_baseline_turns} neutral turn(s): "
+              f"model hears this voice as {top} {self.voice_baseline[top]:.2f} on average")
+
     def _fuse_emotion(self, transcript, emotion, speech_end_time):
         """
         Week 3 Day 5: combine the voice emotion with the words.
         The words decide only when the text model is clearly sure of a
         non-neutral emotion; otherwise the voice result is kept.
         """
+        raw_voice_probs = dict(emotion.get("probs") or {})
+        emotion = self._calibrate_voice(emotion)    # Week 4 (ML)
+
         emotion["voice_label"] = emotion["label"]
         emotion["voice_confidence"] = emotion["confidence"]
         emotion["text_label"] = None
@@ -553,6 +627,10 @@ class IncomingAudioTrack:
 
         if text is None or not emotion.get("probs"):
             return self._damp_voice_disgust(emotion)
+
+        # Week 4 (ML): clearly neutral words -> this is the user's normal voice
+        if text["label"] == "neutral" and text["confidence"] >= 0.6:
+            self._learn_baseline(raw_voice_probs)
 
         label, confidence, source = text_emotion.fuse(emotion["probs"], text["probs"])
 
