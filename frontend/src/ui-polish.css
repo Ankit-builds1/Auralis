@@ -1612,3 +1612,250 @@ body::after {
     opacity: 0.7;
   }
 }
+/* =========================================================
+   Week 4 feature: training mode, emotion map, score card
+   ========================================================= */
+
+.auralis-app .auralis-container .mode-toggle {
+  display: inline-flex;
+  padding: 4px;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.auralis-app .auralis-container .mode-toggle button {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: 500 13px/1 'Inter', sans-serif;
+  cursor: pointer;
+}
+
+.auralis-app .auralis-container .mode-toggle button.is-active {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--text);
+}
+
+.auralis-app .auralis-container .mode-toggle button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.auralis-app .auralis-container .xp-row2 {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 22px;
+}
+
+.auralis-app .auralis-container .xp-panel {
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 28px;
+  background: rgba(10, 13, 34, 0.72);
+}
+
+.auralis-app .auralis-container .xp-panel .xp-chat-head {
+  padding: 0 0 12px;
+}
+
+.auralis-app .auralis-container .xp-muted {
+  color: var(--text-muted);
+  font: 400 12px/1.5 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .training-brief,
+.auralis-app .auralis-container .training-tip {
+  margin: 0 0 16px;
+  color: var(--text-dim);
+  font: 400 14px/1.6 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .agitation-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  color: var(--text-muted);
+  font: 500 13px/1 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .agitation-head strong {
+  font: 700 34px/1 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .agitation-track {
+  position: relative;
+  height: 12px;
+  margin: 12px 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.auralis-app .auralis-container .agitation-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease, background 0.6s ease;
+}
+
+.auralis-app .auralis-container .agitation-goal {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.5);
+  z-index: 1;
+}
+
+.auralis-app .auralis-container .agitation-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-faint);
+  font: 400 11px/1 'Inter', sans-serif;
+  margin-bottom: 16px;
+}
+
+.auralis-app .auralis-container .training-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  color: var(--text-dim);
+  font: 400 13px/1.5 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .training-steps span {
+  display: inline-block;
+  min-width: 38px;
+  margin-right: 8px;
+  font-weight: 700;
+}
+
+.auralis-app .auralis-container .delta-up { color: #f87171; }
+.auralis-app .auralis-container .delta-down { color: #34d399; }
+
+.auralis-app .auralis-container .va-map {
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
+  font-family: 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .va-axis {
+  fill: var(--text-faint);
+  font-size: 9px;
+}
+
+.auralis-app .auralis-container .va-label {
+  fill: rgba(255, 255, 255, 0.28);
+  font-size: 10px;
+}
+
+.auralis-app .auralis-container .va-note {
+  margin: 8px 0 0;
+  text-align: center;
+}
+
+.auralis-app .auralis-container .score-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(3, 5, 18, 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.auralis-app .auralis-container .score-card {
+  width: min(460px, 100%);
+  padding: 32px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  background: #0b0f2a;
+  text-align: center;
+  box-shadow: 0 40px 100px -40px rgba(0, 0, 0, 0.9);
+}
+
+.auralis-app .auralis-container .score-kicker {
+  margin: 0;
+  color: var(--text-muted);
+  font: 500 12px/1 'Inter', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.auralis-app .auralis-container .score-card h2 {
+  margin: 10px 0 4px;
+  font: 700 26px/1.2 'Inter', sans-serif;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+
+.auralis-app .auralis-container .score-pass { color: #34d399; }
+.auralis-app .auralis-container .score-fail { color: #fbbf24; }
+
+.auralis-app .auralis-container .score-points {
+  color: var(--text);
+  font: 800 56px/1.1 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .score-points span {
+  color: var(--text-muted);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.auralis-app .auralis-container .score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.auralis-app .auralis-container .score-grid div {
+  padding: 12px 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 4px;
+}
+
+.auralis-app .auralis-container .score-grid strong {
+  color: var(--text);
+  font: 700 17px/1.2 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .score-grid span {
+  color: var(--text-muted);
+  font: 400 11px/1.2 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .score-tip {
+  margin: 0 0 20px;
+  color: var(--text-dim);
+  font: 400 14px/1.6 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .score-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.auralis-app .auralis-container .score-actions .xp-btn-primary {
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .auralis-app .auralis-container .score-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

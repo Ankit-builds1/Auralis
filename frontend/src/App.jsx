@@ -304,6 +304,83 @@ const Icon = ({ name, size = 18 }) => {
   );
 };
 
+// ---------------------------------------------------------
+// Week 4 feature: emotion map (arousal / valence) + training mode
+// ---------------------------------------------------------
+
+// Where each emotion sits on the circumplex: x = valence (unpleasant ->
+// pleasant), y = arousal (calm -> excited). PROJECT.pdf: "classifying the
+// speaker's emotional state (Arousal/Valence)".
+const EMOTION_VA = {
+  happy: [0.75, 0.45],
+  neutral: [0.05, -0.05],
+  sad: [-0.65, -0.55],
+  angry: [-0.6, 0.8],
+  fear: [-0.7, 0.6],
+  disgust: [-0.7, 0.25],
+};
+
+// Training caller: agitation 100 -> upset & tense, 0 -> calm & settled
+const agitationToVA = (a) => [0.55 - (a / 100) * 1.35, (a / 100) * 1.5 - 0.7];
+
+const agitationColor = (a) =>
+  a >= 70 ? '#f87171' : a >= 45 ? '#fbbf24' : a > 30 ? '#a3e635' : '#34d399';
+
+const EmotionMap = ({ you, caller }) => {
+  const size = 260;
+  const pad = 22;
+  const toXY = ([v, a]) => [
+    pad + ((v + 1) / 2) * (size - 2 * pad),
+    pad + ((1 - a) / 2) * (size - 2 * pad),
+  ];
+  const trail = (pts, color, label) => {
+    if (!pts.length) return null;
+    const xy = pts.map(toXY);
+    return (
+      <g>
+        <polyline
+          points={xy.map(([x, y]) => `${x},${y}`).join(' ')}
+          fill="none" stroke={color} strokeOpacity="0.45" strokeWidth="1.5"
+        />
+        {xy.map(([x, y], i) => (
+          <circle
+            key={i} cx={x} cy={y}
+            r={i === xy.length - 1 ? 7 : 3.5}
+            fill={color}
+            fillOpacity={i === xy.length - 1 ? 1 : 0.25 + (0.6 * (i + 1)) / xy.length}
+          />
+        ))}
+        <text
+          x={xy[xy.length - 1][0] + 10} y={xy[xy.length - 1][1] + 4}
+          fill={color} fontSize="11" fontWeight="600"
+        >
+          {label}
+        </text>
+      </g>
+    );
+  };
+  const c = size / 2;
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} className="va-map" role="img"
+      aria-label="Emotion map: valence left to right, arousal bottom to top">
+      <rect x={pad} y={pad} width={size - 2 * pad} height={size - 2 * pad} rx="14"
+        fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" />
+      <line x1={pad} y1={c} x2={size - pad} y2={c} stroke="rgba(255,255,255,0.10)" />
+      <line x1={c} y1={pad} x2={c} y2={size - pad} stroke="rgba(255,255,255,0.10)" />
+      <text x={size - pad - 4} y={c - 6} textAnchor="end" className="va-axis">pleasant</text>
+      <text x={pad + 4} y={c - 6} className="va-axis">unpleasant</text>
+      <text x={c + 6} y={pad + 12} className="va-axis">excited</text>
+      <text x={c + 6} y={size - pad - 6} className="va-axis">calm</text>
+      {Object.entries(EMOTION_VA).map(([k, va]) => {
+        const [x, y] = toXY(va);
+        return <text key={k} x={x} y={y} textAnchor="middle" className="va-label">{k}</text>;
+      })}
+      {trail(caller, '#f87171', 'Arjun')}
+      {trail(you, '#38e1ff', 'You')}
+    </svg>
+  );
+};
+
 // Week 3 Day 2: emoji for each emotion label sent by the backend
 const EMOTION_EMOJI = {
   angry: '😠',
@@ -535,6 +612,14 @@ function App() {
 
   // Week 4 Day 3: 'experience' (premium demo view) or 'engineer' (all metrics)
   const [view, setView] = useState(loadView);
+
+  // Week 4 feature: 'assistant' or 'training' (crisis negotiation trainer)
+  const [appMode, setAppMode] = useState('assistant');
+  const appModeRef = useRef('assistant');
+  const modeSyncedRef = useRef(false);
+  // { scenario, agitation, start, goal, history: [..], steps: [{delta, reasons}] }
+  const [training, setTraining] = useState(null);
+  const [showScore, setShowScore] = useState(false);
 
   // Week 3 Day 4: one latency breakdown per turn (from 'turn_metrics')
   const [turnMetrics, setTurnMetrics] = useState([]);
@@ -1225,7 +1310,49 @@ function App() {
       return;
     }
 
+    // Week 4: tell the backend which mode we are in, once per connection
+    // (the first backend message proves its audio processor exists)
+    if (!modeSyncedRef.current) {
+      const channel = dataChannelRef.current;
+      if (channel && channel.readyState === 'open') {
+        try {
+          channel.send(JSON.stringify({ type: 'set_mode', mode: appModeRef.current }));
+          modeSyncedRef.current = true;
+        } catch (err) {
+          console.warn('[MODE] could not send mode:', err);
+        }
+      }
+    }
+
     switch (data.type) {
+      // -------- Week 4 feature: training mode --------
+      case 'mode':
+        if (data.mode === 'training') {
+          setTraining({
+            scenario: data.scenario || null,
+            agitation: data.agitation ?? 85,
+            start: data.agitation ?? 85,
+            goal: data.goal ?? 30,
+            history: [data.agitation ?? 85],
+            steps: [],
+          });
+          addEvent(`Training mode on: ${data.scenario?.title ?? 'scenario'}`);
+        } else {
+          setTraining(null);
+          addEvent('Assistant mode');
+        }
+        return;
+
+      case 'training_state':
+        setTraining((t) => ({
+          ...(t || { scenario: null, start: data.start ?? 85, goal: data.goal ?? 30, history: [], steps: [] }),
+          agitation: data.agitation,
+          history: [...(t?.history || []), data.agitation],
+          steps: [...(t?.steps || []), { delta: data.delta, reasons: data.reasons || [] }],
+        }));
+        addEvent(`Agitation ${data.agitation} (${data.delta > 0 ? '+' : ''}${data.delta}): ${(data.reasons || []).join(', ')}`);
+        return;
+
       // ~50 per second: update counters, never log these
       case 'audio_frame': {
         // Fix #2: throttle the Frames counter
@@ -1554,6 +1681,7 @@ function App() {
 
   const connectWebRTC = async () => {
     setError(null);
+    modeSyncedRef.current = false;   // Week 4: send the mode again on this connection
 
     if (!streamRef.current) {
       setError('Start the microphone before connecting.');
@@ -1835,6 +1963,7 @@ function App() {
   // ---------------------------------------------------------
 
   const stopMic = () => {
+    modeSyncedRef.current = false;
     // Week 4 Day 1: waveforms go back to a flat line
     aiWaveRef.current?.source?.disconnect();
     aiWaveRef.current = null;
@@ -2024,16 +2153,77 @@ function App() {
   const xpPhase = !isLive
     ? isConnecting
       ? { key: 'connecting', title: 'Connecting…', sub: 'Setting up a private voice line' }
-      : { key: 'ready', title: 'Talk to Auralis', sub: 'Start a conversation and just speak' }
+      : appMode === 'training'
+        ? { key: 'ready', title: 'Negotiation training', sub: 'Start, introduce yourself to Arjun and calm him down' }
+        : { key: 'ready', title: 'Talk to Auralis', sub: 'Start a conversation and just speak' }
     : vadState === 'speaking'
       ? { key: 'listening', title: 'Listening', sub: 'Pause when you are done' }
       : aiStoppedNow
         ? { key: 'stopped', title: 'Stopped', sub: 'Go ahead, I am listening' }
         : vadState === 'ai_speaking'
-          ? { key: 'speaking', title: 'Auralis is speaking', sub: 'Talk over me any time to interrupt' }
+          ? appMode === 'training'
+            ? { key: 'speaking', title: 'Arjun is speaking', sub: 'Talking over him raises his agitation' }
+            : { key: 'speaking', title: 'Auralis is speaking', sub: 'Talk over me any time to interrupt' }
           : isThinking
             ? { key: 'thinking', title: 'Thinking', sub: 'Understanding your words and your tone' }
-            : { key: 'idle', title: 'I am listening', sub: 'Say something whenever you are ready' };
+            : appMode === 'training'
+              ? { key: 'idle', title: 'Your turn', sub: 'Arjun is waiting. Speak slowly and calmly.' }
+              : { key: 'idle', title: 'I am listening', sub: 'Say something whenever you are ready' };
+
+  const switchMode = (mode) => {
+    if (mode === appModeRef.current) return;
+    appModeRef.current = mode;
+    setAppMode(mode);
+    setShowScore(false);
+    setTraining(null);
+    clearHistory();
+    const channel = dataChannelRef.current;
+    if (channel && channel.readyState === 'open') {
+      try {
+        channel.send(JSON.stringify({ type: 'set_mode', mode }));
+        modeSyncedRef.current = true;
+      } catch (err) {
+        console.warn('[MODE] could not send mode:', err);
+      }
+    }
+  };
+
+  const restartTraining = () => {
+    setShowScore(false);
+    clearHistory();
+    const channel = dataChannelRef.current;
+    if (channel && channel.readyState === 'open') {
+      channel.send(JSON.stringify({ type: 'set_mode', mode: 'training' }));
+    }
+  };
+
+  // Week 4: score card numbers
+  const trainingScore = training
+    ? (() => {
+        const steps = training.steps;
+        const n = steps.length;
+        const calm = steps.filter((st) => st.reasons.some((r) => r.startsWith('calm tone') || r.startsWith('soft tone'))).length;
+        const talkedOver = steps.filter((st) => st.reasons.some((r) => r.startsWith('talked over'))).length;
+        const escalating = steps.filter((st) => st.reasons.some((r) => r.startsWith('escalating'))).length;
+        const empathy = steps.filter((st) => st.reasons.some((r) => r.startsWith('de-escalating'))).length;
+        const end = training.agitation;
+        const lowest = Math.min(...training.history);
+        const success = end <= training.goal;
+        const points = Math.max(0, Math.min(100, Math.round(
+          (training.start - end) * 0.8 + (n ? (calm / n) * 15 : 0) + (n ? (empathy / n) * 10 : 0)
+          - talkedOver * 5 - escalating * 8 + (success ? 10 : 0)
+        )));
+        return { n, calm, talkedOver, escalating, empathy, end, lowest, success, points };
+      })()
+    : null;
+
+  // Week 4: emotion map points (last 10 turns)
+  const youPoints = turns
+    .map((t) => getEmotionView(t.emotion))
+    .filter(Boolean)
+    .map((ev) => EMOTION_VA[ev.sure ? ev.text : 'neutral'] || EMOTION_VA.neutral)
+    .slice(-10);
+  const callerPoints = training ? training.history.slice(-10).map(agitationToVA) : [];
 
   const startConversation = async () => {
     await startMic();
@@ -2102,6 +2292,18 @@ function App() {
         {view === 'experience' && (
           <div className={`xp phase-${xpPhase.key}`}>
             <section className="xp-stage">
+              <div className="mode-toggle" role="tablist" aria-label="Mode">
+                <button role="tab" aria-selected={appMode === 'assistant'}
+                  className={appMode === 'assistant' ? 'is-active' : ''}
+                  onClick={() => switchMode('assistant')}>
+                  Assistant
+                </button>
+                <button role="tab" aria-selected={appMode === 'training'}
+                  className={appMode === 'training' ? 'is-active' : ''}
+                  onClick={() => switchMode('training')}>
+                  Negotiation training
+                </button>
+              </div>
               <div className="xp-orb-wrap">
                 <canvas ref={orbCanvasRef} className="xp-orb" />
               </div>
@@ -2226,6 +2428,104 @@ function App() {
                 )}
               </div>
             </section>
+
+            {/* Week 4 feature: training panel + emotion map */}
+            <section className="xp-row2">
+              {appMode === 'training' && (
+                <div className="xp-panel training-panel">
+                  <div className="xp-chat-head">
+                    <span>Negotiation training</span>
+                    {training && training.steps.length > 0 && (
+                      <button className="xp-link" onClick={() => setShowScore(true)}>End session</button>
+                    )}
+                  </div>
+
+                  <p className="training-brief">
+                    {training?.scenario?.brief ??
+                      'Start the conversation: Auralis plays Arjun, a distressed caller. Your job is to calm him down.'}
+                  </p>
+
+                  <div className="agitation">
+                    <div className="agitation-head">
+                      <span>Arjun's agitation</span>
+                      <strong style={{ color: agitationColor(training?.agitation ?? 85) }}>
+                        {training?.agitation ?? 85}
+                      </strong>
+                    </div>
+                    <div className="agitation-track">
+                      <div className="agitation-goal" style={{ left: `${training?.goal ?? 30}%` }} title="goal" />
+                      <div className="agitation-fill" style={{
+                        width: `${training?.agitation ?? 85}%`,
+                        background: agitationColor(training?.agitation ?? 85),
+                      }} />
+                    </div>
+                    <div className="agitation-scale"><span>calm</span><span>goal ≤ {training?.goal ?? 30}</span><span>panic</span></div>
+                  </div>
+
+                  {training && training.steps.length > 0 ? (
+                    <ul className="training-steps">
+                      {training.steps.slice(-4).reverse().map((st, i) => (
+                        <li key={training.steps.length - i}>
+                          <span className={st.delta > 0 ? 'delta-up' : 'delta-down'}>
+                            {st.delta > 0 ? '+' : ''}{st.delta}
+                          </span>
+                          {st.reasons.join(' · ')}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="training-tip">
+                      Tips: introduce yourself, listen, name his feelings, speak slowly. Avoid "calm down", threats and talking over him.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="xp-panel va-panel">
+                <div className="xp-chat-head">
+                  <span>Emotion map</span>
+                  <span className="xp-muted">arousal × valence</span>
+                </div>
+                <EmotionMap you={youPoints} caller={callerPoints} />
+                <p className="xp-muted va-note">
+                  {appMode === 'training'
+                    ? 'Blue: your tone each turn. Red: Arjun moving from panic toward calm.'
+                    : 'Your detected emotion each turn (last 10).'}
+                </p>
+              </div>
+            </section>
+
+            {/* Week 4 feature: score card */}
+            {showScore && trainingScore && (
+              <div className="score-overlay" role="dialog" aria-modal="true" aria-label="Training score">
+                <div className="score-card">
+                  <p className="score-kicker">Negotiation debrief</p>
+                  <h2 className={trainingScore.success ? 'score-pass' : 'score-fail'}>
+                    {trainingScore.success ? 'De-escalated' : 'Not de-escalated yet'}
+                  </h2>
+                  <div className="score-points">{trainingScore.points}<span>/100</span></div>
+                  <div className="score-grid">
+                    <div><strong>{training.start} → {trainingScore.end}</strong><span>agitation</span></div>
+                    <div><strong>{trainingScore.n}</strong><span>turns</span></div>
+                    <div><strong>{trainingScore.n ? Math.round((trainingScore.calm / trainingScore.n) * 100) : 0}%</strong><span>calm tone</span></div>
+                    <div><strong>{trainingScore.empathy}</strong><span>empathy turns</span></div>
+                    <div><strong>{trainingScore.escalating}</strong><span>escalating turns</span></div>
+                    <div><strong>{trainingScore.talkedOver}</strong><span>talked over him</span></div>
+                  </div>
+                  <p className="score-tip">
+                    {trainingScore.success
+                      ? 'Well done: calm tone and empathy brought Arjun down. Next time try fewer turns.'
+                      : trainingScore.escalating > 0
+                        ? 'Commands like "calm down" or threats pushed him up. Name his feelings instead.'
+                        : 'Keep a calm tone, acknowledge his feelings and ask open questions.'}
+                  </p>
+                  <div className="score-actions">
+                    <button className="xp-btn xp-btn-primary" onClick={restartTraining}>Try again</button>
+                    <button className="xp-btn xp-btn-ghost" onClick={() => setShowScore(false)}>Close</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
