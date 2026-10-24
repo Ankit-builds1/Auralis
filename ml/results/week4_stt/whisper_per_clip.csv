@@ -1,0 +1,961 @@
+model,beam,speaker,emotion,file,reference,hypothesis,word_errors,ms
+tiny.en,1,ankit,angry,ankit_angry_01.wav,I am going to the shop now.,I am going with the shot now.,2,69
+tiny.en,1,ankit,angry,ankit_angry_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,66
+tiny.en,1,ankit,angry,ankit_angry_03.wav,I just got the message from him.,I just got a message from him.,1,61
+tiny.en,1,ankit,angry,ankit_angry_04.wav,We have to finish this today.,We have to finish this today.,0,68
+tiny.en,1,ankit,angry,ankit_angry_05.wav,That is what I was talking about.,That big part I was talking about.,2,60
+tiny.en,1,ankit,angry,ankit_angry_06.wav,Someone is standing at the door.,"Look, someone is standing at their door.",2,59
+tiny.en,1,ankit,angry,ankit_angry_07.wav,I did not expect this at all.,I didn't expect this at all.,2,59
+tiny.en,1,ankit,angry,ankit_angry_08.wav,It is already very late now.,It's very late now.,3,57
+tiny.en,1,ankit,angry,ankit_angry_09.wav,Tell me what happened yesterday.,Tell me what happened here today?,2,68
+tiny.en,1,ankit,angry,ankit_angry_10.wav,I think we should go home.,I think we should go home now.,1,58
+tiny.en,1,ankit,disgust,ankit_disgust_01.wav,I am going to the shop now.,I am going to the south now.,1,62
+tiny.en,1,ankit,disgust,ankit_disgust_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,71
+tiny.en,1,ankit,disgust,ankit_disgust_03.wav,I just got the message from him.,I just got the message from here.,1,66
+tiny.en,1,ankit,disgust,ankit_disgust_04.wav,We have to finish this today.,We have to experience this today.,1,66
+tiny.en,1,ankit,disgust,ankit_disgust_05.wav,That is what I was talking about.,That is what I was talking about.,0,58
+tiny.en,1,ankit,disgust,ankit_disgust_06.wav,Someone is standing at the door.,It's someone standing at the door.,2,59
+tiny.en,1,ankit,disgust,ankit_disgust_07.wav,I did not expect this at all.,I did not expect this at all.,0,61
+tiny.en,1,ankit,disgust,ankit_disgust_08.wav,It is already very late now.,It's already very late now.,2,60
+tiny.en,1,ankit,disgust,ankit_disgust_09.wav,Tell me what happened yesterday.,Then we what happened yesterday?,2,54
+tiny.en,1,ankit,disgust,ankit_disgust_10.wav,I think we should go home.,I think we should go home now.,1,61
+tiny.en,1,ankit,fear,ankit_fear_01.wav,I am going to the shop now.,"And, winter this lockdown now.",6,59
+tiny.en,1,ankit,fear,ankit_fear_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,66
+tiny.en,1,ankit,fear,ankit_fear_03.wav,I just got the message from him.,I just caught him as he strummed him.,5,72
+tiny.en,1,ankit,fear,ankit_fear_04.wav,We have to finish this today.,We have to finish this today.,0,65
+tiny.en,1,ankit,fear,ankit_fear_05.wav,That is what I was talking about.,That means you have time I was talking about...,4,67
+tiny.en,1,ankit,fear,ankit_fear_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,64
+tiny.en,1,ankit,fear,ankit_fear_07.wav,I did not expect this at all.,I did not expect this at all.,0,60
+tiny.en,1,ankit,fear,ankit_fear_08.wav,It is already very late now.,It's already very late now.,2,57
+tiny.en,1,ankit,fear,ankit_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,54
+tiny.en,1,ankit,fear,ankit_fear_10.wav,I think we should go home.,I think we should go home now.,1,63
+tiny.en,1,ankit,happy,ankit_happy_01.wav,I am going to the shop now.,I'm going for the soap now.,4,67
+tiny.en,1,ankit,happy,ankit_happy_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,64
+tiny.en,1,ankit,happy,ankit_happy_03.wav,I just got the message from him.,I just got the message from him.,0,57
+tiny.en,1,ankit,happy,ankit_happy_04.wav,We have to finish this today.,We have to finish yesterday.,2,58
+tiny.en,1,ankit,happy,ankit_happy_05.wav,That is what I was talking about.,This is what I was talking about.,1,63
+tiny.en,1,ankit,happy,ankit_happy_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,59
+tiny.en,1,ankit,happy,ankit_happy_07.wav,I did not expect this at all.,I didn't expect this at all.,2,61
+tiny.en,1,ankit,happy,ankit_happy_08.wav,It is already very late now.,It's already very late now.,2,64
+tiny.en,1,ankit,happy,ankit_happy_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday?,0,55
+tiny.en,1,ankit,happy,ankit_happy_10.wav,I think we should go home.,I think we should go home now.,1,64
+tiny.en,1,ankit,neutral,ankit_neutral_01.wav,I am going to the shop now.,I am going to put this up now.,3,68
+tiny.en,1,ankit,neutral,ankit_neutral_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,61
+tiny.en,1,ankit,neutral,ankit_neutral_03.wav,I just got the message from him.,I just called the message from him.,1,65
+tiny.en,1,ankit,neutral,ankit_neutral_04.wav,We have to finish this today.,We have to finish this today.,0,60
+tiny.en,1,ankit,neutral,ankit_neutral_05.wav,That is what I was talking about.,That is what I was talking about.,0,63
+tiny.en,1,ankit,neutral,ankit_neutral_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,63
+tiny.en,1,ankit,neutral,ankit_neutral_07.wav,I did not expect this at all.,I did not expect this at all.,0,61
+tiny.en,1,ankit,neutral,ankit_neutral_08.wav,It is already very late now.,It's already very late now.,2,57
+tiny.en,1,ankit,neutral,ankit_neutral_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday?,0,52
+tiny.en,1,ankit,neutral,ankit_neutral_10.wav,I think we should go home.,I think we should go home.,0,57
+tiny.en,1,ankit,sad,ankit_sad_01.wav,I am going to the shop now.,I am going to the south now.,1,62
+tiny.en,1,ankit,sad,ankit_sad_02.wav,The meeting is at five o'clock.,We hit it start by a low clock.,8,565
+tiny.en,1,ankit,sad,ankit_sad_03.wav,I just got the message from him.,I just borrowed the Mrs. From here.,3,164
+tiny.en,1,ankit,sad,ankit_sad_04.wav,We have to finish this today.,We have to finish this today.,0,60
+tiny.en,1,ankit,sad,ankit_sad_05.wav,That is what I was talking about.,What I'm talking about.,4,54
+tiny.en,1,ankit,sad,ankit_sad_06.wav,Someone is standing at the door.,Someone is standing at the floor.,1,58
+tiny.en,1,ankit,sad,ankit_sad_07.wav,I did not expect this at all.,I didn't expect this at all.,2,60
+tiny.en,1,ankit,sad,ankit_sad_08.wav,It is already very late now.,It's already very late now.,2,59
+tiny.en,1,ankit,sad,ankit_sad_09.wav,Tell me what happened yesterday.,Let me what happened yesterday.,1,148
+tiny.en,1,ankit,sad,ankit_sad_10.wav,I think we should go home.,I think we're sure to go home now.,4,68
+tiny.en,1,priya,angry,priya_angry_01.wav,I am going to the shop now.,The struggle now.,5,3548
+tiny.en,1,priya,angry,priya_angry_02.wav,The meeting is at five o'clock.,That was Bible,6,359
+tiny.en,1,priya,angry,priya_angry_03.wav,I just got the message from him.,The message from him.,3,54
+tiny.en,1,priya,angry,priya_angry_04.wav,We have to finish this today.,Have to finish this today. I know that will help you. I am going to hide you. I am going to hide you.,19,116
+tiny.en,1,priya,angry,priya_angry_05.wav,That is what I was talking about.,But I was talking about…,3,52
+tiny.en,1,priya,angry,priya_angry_06.wav,Someone is standing at the door.,"Telling a detour, Auralis, Centurion, BTech, BTech, BTech.",8,475
+tiny.en,1,priya,angry,priya_angry_07.wav,I did not expect this at all.,I did not explain this at all.,1,66
+tiny.en,1,priya,angry,priya_angry_08.wav,It is already very late now.,Very late now.,3,55
+tiny.en,1,priya,angry,priya_angry_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,54
+tiny.en,1,priya,angry,priya_angry_10.wav,I think we should go home.,I'm not going to stop the plane. I didn't get it. I'm not going to stop the plane.,17,117
+tiny.en,1,priya,disgust,priya_disgust_01.wav,I am going to the shop now.,The shop now.,4,466
+tiny.en,1,priya,disgust,priya_disgust_02.wav,The meeting is at five o'clock.,Meeting is at 5-0 clock.,3,58
+tiny.en,1,priya,disgust,priya_disgust_03.wav,I just got the message from him.,What the message from him?,3,59
+tiny.en,1,priya,disgust,priya_disgust_04.wav,We have to finish this today.,"He needs this long train, he needs this long train, he needs this long train.",14,91
+tiny.en,1,priya,disgust,priya_disgust_05.wav,That is what I was talking about.,What did we start from the bow?,7,72
+tiny.en,1,priya,disgust,priya_disgust_06.wav,Someone is standing at the door.,Are you standing at the door?,2,61
+tiny.en,1,priya,disgust,priya_disgust_07.wav,I did not expect this at all.,"Take, click this at all.",4,61
+tiny.en,1,priya,disgust,priya_disgust_08.wav,It is already very late now.,Very late now.,3,198
+tiny.en,1,priya,disgust,priya_disgust_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,51
+tiny.en,1,priya,disgust,priya_disgust_10.wav,I think we should go home.,I think we should go home.,0,67
+tiny.en,1,priya,fear,priya_fear_01.wav,I am going to the shop now.,Thank you for coming on.,7,59
+tiny.en,1,priya,fear,priya_fear_02.wav,The meeting is at five o'clock.,"BTech, BTech, BTech, BTech, BTech, BTech.",6,179
+tiny.en,1,priya,fear,priya_fear_03.wav,I just got the message from him.,Got the message from him.,2,61
+tiny.en,1,priya,fear,priya_fear_04.wav,We have to finish this today.,"To finish this week of reading, may I have a...",9,162
+tiny.en,1,priya,fear,priya_fear_05.wav,That is what I was talking about.,What I was talking about...,2,58
+tiny.en,1,priya,fear,priya_fear_06.wav,Someone is standing at the door.,"So, I think I did all.",6,61
+tiny.en,1,priya,fear,priya_fear_07.wav,I did not expect this at all.,We did not expect this at all. I don't know.,4,78
+tiny.en,1,priya,fear,priya_fear_08.wav,It is already very late now.,Already been late now. We got here in the wrong room.,10,79
+tiny.en,1,priya,fear,priya_fear_09.wav,Tell me what happened yesterday.,Help me want happiness today.,4,60
+tiny.en,1,priya,fear,priya_fear_10.wav,I think we should go home.,Hello everyone. Thank you for coming up. Thank you for coming up. Thank you for coming up.,17,718
+tiny.en,1,priya,happy,priya_happy_01.wav,I am going to the shop now.,Please show up now.,6,55
+tiny.en,1,priya,happy,priya_happy_02.wav,The meeting is at five o'clock.,Is that five foot log? Like that. Like that.,9,73
+tiny.en,1,priya,happy,priya_happy_03.wav,I just got the message from him.,Message from him.,4,433
+tiny.en,1,priya,happy,priya_happy_04.wav,We have to finish this today.,Good to finish this today.,2,58
+tiny.en,1,priya,happy,priya_happy_05.wav,That is what I was talking about.,I was talking about…,3,52
+tiny.en,1,priya,happy,priya_happy_06.wav,Someone is standing at the door.,Standing at the door.,2,56
+tiny.en,1,priya,happy,priya_happy_07.wav,I did not expect this at all.,Please say to all.,6,438
+tiny.en,1,priya,happy,priya_happy_08.wav,It is already very late now.,Is it late now?,3,494
+tiny.en,1,priya,happy,priya_happy_09.wav,Tell me what happened yesterday.,"Good afternoon, good morning, good morning.",6,2920
+tiny.en,1,priya,happy,priya_happy_10.wav,I think we should go home.,"Sit, go home!",4,551
+tiny.en,1,priya,neutral,priya_neutral_01.wav,I am going to the shop now.,Thank you. Thank you. Thank you. Thank you.,8,79
+tiny.en,1,priya,neutral,priya_neutral_02.wav,The meeting is at five o'clock.,I'm going to be here. I'm going to take a look.,11,1984
+tiny.en,1,priya,neutral,priya_neutral_03.wav,I just got the message from him.,Thank you.,7,446
+tiny.en,1,priya,neutral,priya_neutral_04.wav,We have to finish this today.,"Finish this today, didn't it? I am proud of what it is.",12,88
+tiny.en,1,priya,neutral,priya_neutral_05.wav,That is what I was talking about.,What I was talking about.,2,58
+tiny.en,1,priya,neutral,priya_neutral_06.wav,Someone is standing at the door.,Standing at the door.,2,385
+tiny.en,1,priya,neutral,priya_neutral_07.wav,I did not expect this at all.,"If not, expect this at all.",2,65
+tiny.en,1,priya,neutral,priya_neutral_08.wav,It is already very late now.,It's already very late now.,2,64
+tiny.en,1,priya,neutral,priya_neutral_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,58
+tiny.en,1,priya,neutral,priya_neutral_10.wav,I think we should go home.,We should go home and go home.,5,69
+tiny.en,1,priya,sad,priya_sad_01.wav,I am going to the shop now.,This shot now.,6,48
+tiny.en,1,priya,sad,priya_sad_02.wav,The meeting is at five o'clock.,Is that 5 o'clock?,3,67
+tiny.en,1,priya,sad,priya_sad_03.wav,I just got the message from him.,God demands sage from me. Yeah.,7,61
+tiny.en,1,priya,sad,priya_sad_04.wav,We have to finish this today.,To finish this today.,2,54
+tiny.en,1,priya,sad,priya_sad_05.wav,That is what I was talking about.,What I was talking about.,2,60
+tiny.en,1,priya,sad,priya_sad_06.wav,Someone is standing at the door.,It's turning into one thing.,6,67
+tiny.en,1,priya,sad,priya_sad_07.wav,I did not expect this at all.,"Big this, I know what to do.",7,68
+tiny.en,1,priya,sad,priya_sad_08.wav,It is already very late now.,"Ready, very late now.",3,60
+tiny.en,1,priya,sad,priya_sad_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,55
+tiny.en,1,priya,sad,priya_sad_10.wav,I think we should go home.,I'm going to go read one of the...,8,305
+tiny.en,5,ankit,angry,ankit_angry_01.wav,I am going to the shop now.,I am going for the shot now.,2,87
+tiny.en,5,ankit,angry,ankit_angry_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,94
+tiny.en,5,ankit,angry,ankit_angry_03.wav,I just got the message from him.,I just got the message from him.,0,90
+tiny.en,5,ankit,angry,ankit_angry_04.wav,We have to finish this today.,And we have to finish this today.,1,82
+tiny.en,5,ankit,angry,ankit_angry_05.wav,That is what I was talking about.,That is what I was talking about.,0,86
+tiny.en,5,ankit,angry,ankit_angry_06.wav,Someone is standing at the door.,"Look, someone is standing at their door.",2,90
+tiny.en,5,ankit,angry,ankit_angry_07.wav,I did not expect this at all.,I didn't expect this at all.,2,92
+tiny.en,5,ankit,angry,ankit_angry_08.wav,It is already very late now.,It's very late now.,3,96
+tiny.en,5,ankit,angry,ankit_angry_09.wav,Tell me what happened yesterday.,"Tell me, what happened here today.",2,99
+tiny.en,5,ankit,angry,ankit_angry_10.wav,I think we should go home.,I think we should go home now.,1,88
+tiny.en,5,ankit,disgust,ankit_disgust_01.wav,I am going to the shop now.,I am going to the south now.,1,82
+tiny.en,5,ankit,disgust,ankit_disgust_02.wav,The meeting is at five o'clock.,The meeting is at 5 foot.,1,112
+tiny.en,5,ankit,disgust,ankit_disgust_03.wav,I just got the message from him.,I just got the message from here.,1,78
+tiny.en,5,ankit,disgust,ankit_disgust_04.wav,We have to finish this today.,We have put feelings to this today.,3,93
+tiny.en,5,ankit,disgust,ankit_disgust_05.wav,That is what I was talking about.,That is what I was talking about.,0,85
+tiny.en,5,ankit,disgust,ankit_disgust_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,86
+tiny.en,5,ankit,disgust,ankit_disgust_07.wav,I did not expect this at all.,I did not expect this at all.,0,83
+tiny.en,5,ankit,disgust,ankit_disgust_08.wav,It is already very late now.,It's already very late now.,2,96
+tiny.en,5,ankit,disgust,ankit_disgust_09.wav,Tell me what happened yesterday.,Don't be what happened yesterday.,2,73
+tiny.en,5,ankit,disgust,ankit_disgust_10.wav,I think we should go home.,I think we should go home now.,1,99
+tiny.en,5,ankit,fear,ankit_fear_01.wav,I am going to the shop now.,And went to the shop now.,3,87
+tiny.en,5,ankit,fear,ankit_fear_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock we had.,2,111
+tiny.en,5,ankit,fear,ankit_fear_03.wav,I just got the message from him.,I just caught a message from him.,2,96
+tiny.en,5,ankit,fear,ankit_fear_04.wav,We have to finish this today.,We have to finish this today.,0,81
+tiny.en,5,ankit,fear,ankit_fear_05.wav,That is what I was talking about.,That means your time was talking about...,3,78
+tiny.en,5,ankit,fear,ankit_fear_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,84
+tiny.en,5,ankit,fear,ankit_fear_07.wav,I did not expect this at all.,I did not expect this at all.,0,86
+tiny.en,5,ankit,fear,ankit_fear_08.wav,It is already very late now.,It's already very late now.,2,77
+tiny.en,5,ankit,fear,ankit_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,69
+tiny.en,5,ankit,fear,ankit_fear_10.wav,I think we should go home.,I think we should go home now.,1,78
+tiny.en,5,ankit,happy,ankit_happy_01.wav,I am going to the shop now.,I'm going for the soap now.,4,90
+tiny.en,5,ankit,happy,ankit_happy_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,94
+tiny.en,5,ankit,happy,ankit_happy_03.wav,I just got the message from him.,I just got the message from him.,0,80
+tiny.en,5,ankit,happy,ankit_happy_04.wav,We have to finish this today.,We have to finish yesterday.,2,86
+tiny.en,5,ankit,happy,ankit_happy_05.wav,That is what I was talking about.,This is what I was talking about.,1,78
+tiny.en,5,ankit,happy,ankit_happy_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,82
+tiny.en,5,ankit,happy,ankit_happy_07.wav,I did not expect this at all.,I didn't expect this at all.,2,79
+tiny.en,5,ankit,happy,ankit_happy_08.wav,It is already very late now.,It's already very late now.,2,88
+tiny.en,5,ankit,happy,ankit_happy_09.wav,Tell me what happened yesterday.,"Tell me, what happened yesterday?",0,71
+tiny.en,5,ankit,happy,ankit_happy_10.wav,I think we should go home.,I think we should go home now.,1,77
+tiny.en,5,ankit,neutral,ankit_neutral_01.wav,I am going to the shop now.,I am going to put this up now.,3,93
+tiny.en,5,ankit,neutral,ankit_neutral_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,84
+tiny.en,5,ankit,neutral,ankit_neutral_03.wav,I just got the message from him.,I just called the message from him.,1,78
+tiny.en,5,ankit,neutral,ankit_neutral_04.wav,We have to finish this today.,We have to finish this today.,0,95
+tiny.en,5,ankit,neutral,ankit_neutral_05.wav,That is what I was talking about.,That is what I was talking about.,0,91
+tiny.en,5,ankit,neutral,ankit_neutral_06.wav,Someone is standing at the door.,Someone is standing at the floor.,1,86
+tiny.en,5,ankit,neutral,ankit_neutral_07.wav,I did not expect this at all.,I did not expect this at all.,0,77
+tiny.en,5,ankit,neutral,ankit_neutral_08.wav,It is already very late now.,It's already very late now.,2,81
+tiny.en,5,ankit,neutral,ankit_neutral_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday?,0,70
+tiny.en,5,ankit,neutral,ankit_neutral_10.wav,I think we should go home.,I think we should go home.,0,77
+tiny.en,5,ankit,sad,ankit_sad_01.wav,I am going to the shop now.,I am going to the south now.,1,87
+tiny.en,5,ankit,sad,ankit_sad_02.wav,The meeting is at five o'clock.,"We hit it, start by the clock.",7,453
+tiny.en,5,ankit,sad,ankit_sad_03.wav,I just got the message from him.,I just borrowed the message from you.,2,97
+tiny.en,5,ankit,sad,ankit_sad_04.wav,We have to finish this today.,We have to finish this today.,0,74
+tiny.en,5,ankit,sad,ankit_sad_05.wav,That is what I was talking about.,What I'm talking about.,4,69
+tiny.en,5,ankit,sad,ankit_sad_06.wav,Someone is standing at the door.,Someone is standing at the floor.,1,74
+tiny.en,5,ankit,sad,ankit_sad_07.wav,I did not expect this at all.,I didn't expect this at all.,2,86
+tiny.en,5,ankit,sad,ankit_sad_08.wav,It is already very late now.,It is already very late now.,0,82
+tiny.en,5,ankit,sad,ankit_sad_09.wav,Tell me what happened yesterday.,Let me what happened yesterday.,1,167
+tiny.en,5,ankit,sad,ankit_sad_10.wav,I think we should go home.,I think we're sure to go home now.,4,87
+tiny.en,5,priya,angry,priya_angry_01.wav,I am going to the shop now.,Did you stop now? No. Why did it stop? So it was like the only one at all.,17,3827
+tiny.en,5,priya,angry,priya_angry_02.wav,The meeting is at five o'clock.,That was bibody.,6,363
+tiny.en,5,priya,angry,priya_angry_03.wav,I just got the message from him.,The message from him.,3,77
+tiny.en,5,priya,angry,priya_angry_04.wav,We have to finish this today.,I have to finish this today. I will have to finish the video. Bye bye.,10,1371
+tiny.en,5,priya,angry,priya_angry_05.wav,That is what I was talking about.,But I was talking about…,3,77
+tiny.en,5,priya,angry,priya_angry_06.wav,Someone is standing at the door.,Thank you for watching.,6,1436
+tiny.en,5,priya,angry,priya_angry_07.wav,I did not expect this at all.,I did not explain this at all.,1,97
+tiny.en,5,priya,angry,priya_angry_08.wav,It is already very late now.,Very late now.,3,78
+tiny.en,5,priya,angry,priya_angry_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,76
+tiny.en,5,priya,angry,priya_angry_10.wav,I think we should go home.,She's a great boy. I'm not going to stop the pain of the night. I didn't care. I'm not going to stay there.,22,1781
+tiny.en,5,priya,disgust,priya_disgust_01.wav,I am going to the shop now.,I'm going to show up now.,4,1507
+tiny.en,5,priya,disgust,priya_disgust_02.wav,The meeting is at five o'clock.,Meeting is at 5 o'clock.,1,93
+tiny.en,5,priya,disgust,priya_disgust_03.wav,I just got the message from him.,What the message from him?,3,85
+tiny.en,5,priya,disgust,priya_disgust_04.wav,We have to finish this today.,We need this one today because that will be...,8,114
+tiny.en,5,priya,disgust,priya_disgust_05.wav,That is what I was talking about.,What are you guys talking about?,5,107
+tiny.en,5,priya,disgust,priya_disgust_06.wav,Someone is standing at the door.,Are you standing at the door?,2,126
+tiny.en,5,priya,disgust,priya_disgust_07.wav,I did not expect this at all.,Let's pick this at all.,4,89
+tiny.en,5,priya,disgust,priya_disgust_08.wav,It is already very late now.,Very late now.,3,149
+tiny.en,5,priya,disgust,priya_disgust_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,78
+tiny.en,5,priya,disgust,priya_disgust_10.wav,I think we should go home.,I think we should go home.,0,85
+tiny.en,5,priya,fear,priya_fear_01.wav,I am going to the shop now.,Thank you for coming on.,7,88
+tiny.en,5,priya,fear,priya_fear_02.wav,The meeting is at five o'clock.,Beating is at 5 o'clock.,2,94
+tiny.en,5,priya,fear,priya_fear_03.wav,I just got the message from him.,"Got the message from him, got the ordinary giraffe.",6,106
+tiny.en,5,priya,fear,priya_fear_04.wav,We have to finish this today.,"To finish, this week you will be reading. May I have a...",11,120
+tiny.en,5,priya,fear,priya_fear_05.wav,That is what I was talking about.,What I was talking about...,2,108
+tiny.en,5,priya,fear,priya_fear_06.wav,Someone is standing at the door.,"So, I think I did all.",6,315
+tiny.en,5,priya,fear,priya_fear_07.wav,I did not expect this at all.,We did not expect this at all. I don't know.,4,102
+tiny.en,5,priya,fear,priya_fear_08.wav,It is already very late now.,"Already, very late now. We got here in my room.",8,111
+tiny.en,5,priya,fear,priya_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday?,0,100
+tiny.en,5,priya,fear,priya_fear_10.wav,I think we should go home.,Hello everyone. Thank you for coming up. Thank you very much for being with me.,15,1563
+tiny.en,5,priya,happy,priya_happy_01.wav,I am going to the shop now.,"Today's show of now, we are going to put it in every time we are done.",14,166
+tiny.en,5,priya,happy,priya_happy_02.wav,The meeting is at five o'clock.,Is that five foot log? Like that. Like that.,9,107
+tiny.en,5,priya,happy,priya_happy_03.wav,I just got the message from him.,"My stage is on him, I'm going.",7,136
+tiny.en,5,priya,happy,priya_happy_04.wav,We have to finish this today.,Good to finish this today.,2,92
+tiny.en,5,priya,happy,priya_happy_05.wav,That is what I was talking about.,I was talking about…,3,106
+tiny.en,5,priya,happy,priya_happy_06.wav,Someone is standing at the door.,Standing at the door.,2,86
+tiny.en,5,priya,happy,priya_happy_07.wav,I did not expect this at all.,"Please, I don't know, I don't know, I don't know, I don't know, I don't know...",15,211
+tiny.en,5,priya,happy,priya_happy_08.wav,It is already very late now.,Did you leave now?,5,1601
+tiny.en,5,priya,happy,priya_happy_09.wav,Tell me what happened yesterday.,Good afternoon. Good morning. Thank you.,6,2640
+tiny.en,5,priya,happy,priya_happy_10.wav,I think we should go home.,"Sit, go home!",4,556
+tiny.en,5,priya,neutral,priya_neutral_01.wav,I am going to the shop now.,Thank you. Thank you. Thank you. Thank you.,8,1593
+tiny.en,5,priya,neutral,priya_neutral_02.wav,The meeting is at five o'clock.,"No clock, no, no, no, no, no, no, no, no, no.",11,152
+tiny.en,5,priya,neutral,priya_neutral_03.wav,I just got the message from him.,"Thank you very much for watching this video and I will see you in the next video, see you in the next video, see you in the next video, see you in the next video, see you in the next video. Bye bye.",41,338
+tiny.en,5,priya,neutral,priya_neutral_04.wav,We have to finish this today.,"Finish this today, didn't it? I am proud of what it is.",12,133
+tiny.en,5,priya,neutral,priya_neutral_05.wav,That is what I was talking about.,What? I was talking about…,2,83
+tiny.en,5,priya,neutral,priya_neutral_06.wav,Someone is standing at the door.,It's standing at the door.,2,108
+tiny.en,5,priya,neutral,priya_neutral_07.wav,I did not expect this at all.,We did not expect this at all of them.,3,118
+tiny.en,5,priya,neutral,priya_neutral_08.wav,It is already very late now.,It's already very late now.,2,109
+tiny.en,5,priya,neutral,priya_neutral_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,88
+tiny.en,5,priya,neutral,priya_neutral_10.wav,I think we should go home.,We should go home and go home.,5,130
+tiny.en,5,priya,sad,priya_sad_01.wav,I am going to the shop now.,This shot now.,6,73
+tiny.en,5,priya,sad,priya_sad_02.wav,The meeting is at five o'clock.,Is that 5 o'clock?,3,109
+tiny.en,5,priya,sad,priya_sad_03.wav,I just got the message from him.,Got the message from me. Yeah.,4,100
+tiny.en,5,priya,sad,priya_sad_04.wav,We have to finish this today.,To finish this today.,2,164
+tiny.en,5,priya,sad,priya_sad_05.wav,That is what I was talking about.,What? I was talking about...,2,108
+tiny.en,5,priya,sad,priya_sad_06.wav,Someone is standing at the door.,It's time to get to do everything.,7,127
+tiny.en,5,priya,sad,priya_sad_07.wav,I did not expect this at all.,"Take this, I don't want to... No, I can... I can make this...",12,137
+tiny.en,5,priya,sad,priya_sad_08.wav,It is already very late now.,Ready? Very late now.,3,143
+tiny.en,5,priya,sad,priya_sad_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,97
+tiny.en,5,priya,sad,priya_sad_10.wav,I think we should go home.,"Oh no, I'm not going to be mad at them.",10,105
+base.en,1,ankit,angry,ankit_angry_01.wav,I am going to the shop now.,I am going with a shot now.,3,99
+base.en,1,ankit,angry,ankit_angry_02.wav,The meeting is at five o'clock.,The meeting is at five o'clock.,0,109
+base.en,1,ankit,angry,ankit_angry_03.wav,I just got the message from him.,I just got the message from him.,0,96
+base.en,1,ankit,angry,ankit_angry_04.wav,We have to finish this today.,We have to finish this today.,0,101
+base.en,1,ankit,angry,ankit_angry_05.wav,That is what I was talking about.,That is what I was talking about.,0,95
+base.en,1,ankit,angry,ankit_angry_06.wav,Someone is standing at the door.,"Look, someone is standing at their door.",2,95
+base.en,1,ankit,angry,ankit_angry_07.wav,I did not expect this at all.,I didn't expect this at all.,2,97
+base.en,1,ankit,angry,ankit_angry_08.wav,It is already very late now.,It's a very late now.,3,85
+base.en,1,ankit,angry,ankit_angry_09.wav,Tell me what happened yesterday.,And what happened yesterday?,2,82
+base.en,1,ankit,angry,ankit_angry_10.wav,I think we should go home.,I think we should go home now.,1,90
+base.en,1,ankit,disgust,ankit_disgust_01.wav,I am going to the shop now.,I am going to put a talk now.,3,95
+base.en,1,ankit,disgust,ankit_disgust_02.wav,The meeting is at five o'clock.,The meeting is at 5.00.,1,3478
+base.en,1,ankit,disgust,ankit_disgust_03.wav,I just got the message from him.,I just got the message from him.,0,91
+base.en,1,ankit,disgust,ankit_disgust_04.wav,We have to finish this today.,We have put some incidents today.,3,88
+base.en,1,ankit,disgust,ankit_disgust_05.wav,That is what I was talking about.,That is what I was talking about.,0,102
+base.en,1,ankit,disgust,ankit_disgust_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,84
+base.en,1,ankit,disgust,ankit_disgust_07.wav,I did not expect this at all.,I did not expect this at all.,0,98
+base.en,1,ankit,disgust,ankit_disgust_08.wav,It is already very late now.,It's already very late now.,2,97
+base.en,1,ankit,disgust,ankit_disgust_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,85
+base.en,1,ankit,disgust,ankit_disgust_10.wav,I think we should go home.,I think we should go home now.,1,94
+base.en,1,ankit,fear,ankit_fear_01.wav,I am going to the shop now.,And we're going to stop now.,4,89
+base.en,1,ankit,fear,ankit_fear_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,101
+base.en,1,ankit,fear,ankit_fear_03.wav,I just got the message from him.,I just got a message from him.,1,96
+base.en,1,ankit,fear,ankit_fear_04.wav,We have to finish this today.,We have to finish this today.,0,98
+base.en,1,ankit,fear,ankit_fear_05.wav,That is what I was talking about.,That means your time is talking about...,4,97
+base.en,1,ankit,fear,ankit_fear_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,102
+base.en,1,ankit,fear,ankit_fear_07.wav,I did not expect this at all.,"Right, it's not expected this at all.",3,100
+base.en,1,ankit,fear,ankit_fear_08.wav,It is already very late now.,It's already very late now.,2,87
+base.en,1,ankit,fear,ankit_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,87
+base.en,1,ankit,fear,ankit_fear_10.wav,I think we should go home.,I think we should go home now.,1,94
+base.en,1,ankit,happy,ankit_happy_01.wav,I am going to the shop now.,I'm going with the soap now.,4,93
+base.en,1,ankit,happy,ankit_happy_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,106
+base.en,1,ankit,happy,ankit_happy_03.wav,I just got the message from him.,I just got the message from him.,0,94
+base.en,1,ankit,happy,ankit_happy_04.wav,We have to finish this today.,We have to finish today.,1,90
+base.en,1,ankit,happy,ankit_happy_05.wav,That is what I was talking about.,This is what I was talking about.,1,98
+base.en,1,ankit,happy,ankit_happy_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,92
+base.en,1,ankit,happy,ankit_happy_07.wav,I did not expect this at all.,I didn't expect this at all.,2,95
+base.en,1,ankit,happy,ankit_happy_08.wav,It is already very late now.,It's already very late now.,2,94
+base.en,1,ankit,happy,ankit_happy_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,88
+base.en,1,ankit,happy,ankit_happy_10.wav,I think we should go home.,I think we should go home now.,1,91
+base.en,1,ankit,neutral,ankit_neutral_01.wav,I am going to the shop now.,I am going for the soft now.,2,99
+base.en,1,ankit,neutral,ankit_neutral_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,99
+base.en,1,ankit,neutral,ankit_neutral_03.wav,I just got the message from him.,I just got the message from him.,0,92
+base.en,1,ankit,neutral,ankit_neutral_04.wav,We have to finish this today.,We have to finish this today.,0,96
+base.en,1,ankit,neutral,ankit_neutral_05.wav,That is what I was talking about.,That is what I was talking about.,0,100
+base.en,1,ankit,neutral,ankit_neutral_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,88
+base.en,1,ankit,neutral,ankit_neutral_07.wav,I did not expect this at all.,I did not expect this at all.,0,92
+base.en,1,ankit,neutral,ankit_neutral_08.wav,It is already very late now.,It's already very late now.,2,91
+base.en,1,ankit,neutral,ankit_neutral_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,88
+base.en,1,ankit,neutral,ankit_neutral_10.wav,I think we should go home.,"Lightning, which would go home.",4,87
+base.en,1,ankit,sad,ankit_sad_01.wav,I am going to the shop now.,I am going a bit of shock now.,4,101
+base.en,1,ankit,sad,ankit_sad_02.wav,The meeting is at five o'clock.,We did start by 4 o'clock.,5,100
+base.en,1,ankit,sad,ankit_sad_03.wav,I just got the message from him.,I just grabbed the misses from him.,2,95
+base.en,1,ankit,sad,ankit_sad_04.wav,We have to finish this today.,We have the Finanfist today.,3,107
+base.en,1,ankit,sad,ankit_sad_05.wav,That is what I was talking about.,We were talking about...,5,79
+base.en,1,ankit,sad,ankit_sad_06.wav,Someone is standing at the door.,Someone is standing at the floor.,1,90
+base.en,1,ankit,sad,ankit_sad_07.wav,I did not expect this at all.,I didn't expect this at all.,2,94
+base.en,1,ankit,sad,ankit_sad_08.wav,It is already very late now.,It's already very late now.,2,94
+base.en,1,ankit,sad,ankit_sad_09.wav,Tell me what happened yesterday.,We'll make what happened yesterday.,2,90
+base.en,1,ankit,sad,ankit_sad_10.wav,I think we should go home.,I think we should go home now.,1,98
+base.en,1,priya,angry,priya_angry_01.wav,I am going to the shop now.,No.,7,68
+base.en,1,priya,angry,priya_angry_02.wav,The meeting is at five o'clock.,That was Bible Talk.,6,83
+base.en,1,priya,angry,priya_angry_03.wav,I just got the message from him.,The message from him.,3,78
+base.en,1,priya,angry,priya_angry_04.wav,We have to finish this today.,I have to finish this today.,1,85
+base.en,1,priya,angry,priya_angry_05.wav,That is what I was talking about.,What I was talking about.,2,82
+base.en,1,priya,angry,priya_angry_06.wav,Someone is standing at the door.,Standing at the door.,2,449
+base.en,1,priya,angry,priya_angry_07.wav,I did not expect this at all.,I did not explain this at all now.,2,95
+base.en,1,priya,angry,priya_angry_08.wav,It is already very late now.,We're in late now.,4,84
+base.en,1,priya,angry,priya_angry_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,77
+base.en,1,priya,angry,priya_angry_10.wav,I think we should go home.,"Thumba Prabhupāda, Nātumjī, Thumba Prabhupāda, Nātumjī, Thumba Prabhupāda.",13,3442
+base.en,1,priya,disgust,priya_disgust_01.wav,I am going to the shop now.,The shop now.,4,78
+base.en,1,priya,disgust,priya_disgust_02.wav,The meeting is at five o'clock.,Meeting Z5 Book Lock.,5,89
+base.en,1,priya,disgust,priya_disgust_03.wav,I just got the message from him.,The message from him.,3,85
+base.en,1,priya,disgust,priya_disgust_04.wav,We have to finish this today.,Finish this today.,3,76
+base.en,1,priya,disgust,priya_disgust_05.wav,That is what I was talking about.,What I was talking about...,2,86
+base.en,1,priya,disgust,priya_disgust_06.wav,Someone is standing at the door.,"When you're standing at the door,",2,103
+base.en,1,priya,disgust,priya_disgust_07.wav,I did not expect this at all.,I expect this at all.,2,89
+base.en,1,priya,disgust,priya_disgust_08.wav,It is already very late now.,It's very late now.,3,87
+base.en,1,priya,disgust,priya_disgust_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,75
+base.en,1,priya,disgust,priya_disgust_10.wav,I think we should go home.,I think we should go home.,0,95
+base.en,1,priya,fear,priya_fear_01.wav,I am going to the shop now.,"Odisha, what's going on?",6,465
+base.en,1,priya,fear,priya_fear_02.wav,The meeting is at five o'clock.,Beatings at 5 o'clock.,3,90
+base.en,1,priya,fear,priya_fear_03.wav,I just got the message from him.,I got the message from him.,1,98
+base.en,1,priya,fear,priya_fear_04.wav,We have to finish this today.,To finish this week of morning.,5,92
+base.en,1,priya,fear,priya_fear_05.wav,That is what I was talking about.,What I was talking about...,2,87
+base.en,1,priya,fear,priya_fear_06.wav,Someone is standing at the door.,Standing at the door.,2,78
+base.en,1,priya,fear,priya_fear_07.wav,I did not expect this at all.,Did Nodix bank this at all? I don't know.,6,122
+base.en,1,priya,fear,priya_fear_08.wav,It is already very late now.,Already been late now.,3,82
+base.en,1,priya,fear,priya_fear_09.wav,Tell me what happened yesterday.,"I mean, what happened yesterday?",2,86
+base.en,1,priya,fear,priya_fear_10.wav,I think we should go home.,Go home.,4,71
+base.en,1,priya,happy,priya_happy_01.wav,I am going to the shop now.,To this shop now.,4,79
+base.en,1,priya,happy,priya_happy_02.wav,The meeting is at five o'clock.,Is that 5 foot log? Like that. Like that.,9,114
+base.en,1,priya,happy,priya_happy_03.wav,I just got the message from him.,Message from him.,4,82
+base.en,1,priya,happy,priya_happy_04.wav,We have to finish this today.,Finish this today.,3,78
+base.en,1,priya,happy,priya_happy_05.wav,That is what I was talking about.,I was talking about...,3,82
+base.en,1,priya,happy,priya_happy_06.wav,Someone is standing at the door.,Standing at the door.,2,81
+base.en,1,priya,happy,priya_happy_07.wav,I did not expect this at all.,Please say no.,7,75
+base.en,1,priya,happy,priya_happy_08.wav,It is already very late now.,We did lead now.,5,83
+base.en,1,priya,happy,priya_happy_09.wav,Tell me what happened yesterday.,We'll see you in the next video.,7,338
+base.en,1,priya,happy,priya_happy_10.wav,I think we should go home.,Go home.,4,69
+base.en,1,priya,neutral,priya_neutral_01.wav,I am going to the shop now.,"Now, we'll just give a quick try. We'll give you a quick try.",13,316
+base.en,1,priya,neutral,priya_neutral_02.wav,The meeting is at five o'clock.,"I will take a quick look at the video, and I will take a quick look at the video.",17,3882
+base.en,1,priya,neutral,priya_neutral_03.wav,I just got the message from him.,Thank you.,7,1244
+base.en,1,priya,neutral,priya_neutral_04.wav,We have to finish this today.,Finish this today.,3,78
+base.en,1,priya,neutral,priya_neutral_05.wav,That is what I was talking about.,What I was talking about...,2,86
+base.en,1,priya,neutral,priya_neutral_06.wav,Someone is standing at the door.,It's standing at the door.,2,93
+base.en,1,priya,neutral,priya_neutral_07.wav,I did not expect this at all.,Not expect this at all.,2,87
+base.en,1,priya,neutral,priya_neutral_08.wav,It is already very late now.,It's already very late now.,2,94
+base.en,1,priya,neutral,priya_neutral_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,76
+base.en,1,priya,neutral,priya_neutral_10.wav,I think we should go home.,We should go home.,2,87
+base.en,1,priya,sad,priya_sad_01.wav,I am going to the shop now.,This shop now.,5,81
+base.en,1,priya,sad,priya_sad_02.wav,The meeting is at five o'clock.,Is that Bible cloth?,5,87
+base.en,1,priya,sad,priya_sad_03.wav,I just got the message from him.,Got the message from me.,3,87
+base.en,1,priya,sad,priya_sad_04.wav,We have to finish this today.,To finish this today.,2,85
+base.en,1,priya,sad,priya_sad_05.wav,That is what I was talking about.,What I was talking about.,2,89
+base.en,1,priya,sad,priya_sad_06.wav,Someone is standing at the door.,Standing at the door.,2,79
+base.en,1,priya,sad,priya_sad_07.wav,I did not expect this at all.,Big this and on.,6,87
+base.en,1,priya,sad,priya_sad_08.wav,It is already very late now.,"Ready, very late now.",3,89
+base.en,1,priya,sad,priya_sad_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,73
+base.en,1,priya,sad,priya_sad_10.wav,I think we should go home.,"No, no, no, I'm not going to be mad at this.",11,1293
+base.en,5,ankit,angry,ankit_angry_01.wav,I am going to the shop now.,I am going for the shot now.,2,134
+base.en,5,ankit,angry,ankit_angry_02.wav,The meeting is at five o'clock.,The meeting is at five o'clock.,0,140
+base.en,5,ankit,angry,ankit_angry_03.wav,I just got the message from him.,I just got the message from him.,0,139
+base.en,5,ankit,angry,ankit_angry_04.wav,We have to finish this today.,We have to finish this today.,0,140
+base.en,5,ankit,angry,ankit_angry_05.wav,That is what I was talking about.,That is what I was talking about.,0,129
+base.en,5,ankit,angry,ankit_angry_06.wav,Someone is standing at the door.,"Look, someone is standing at their door.",2,138
+base.en,5,ankit,angry,ankit_angry_07.wav,I did not expect this at all.,I didn't expect this at all.,2,135
+base.en,5,ankit,angry,ankit_angry_08.wav,It is already very late now.,It's a very late now.,3,124
+base.en,5,ankit,angry,ankit_angry_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,119
+base.en,5,ankit,angry,ankit_angry_10.wav,I think we should go home.,I think we should go home now.,1,130
+base.en,5,ankit,disgust,ankit_disgust_01.wav,I am going to the shop now.,I am going to put the salt now.,2,129
+base.en,5,ankit,disgust,ankit_disgust_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,126
+base.en,5,ankit,disgust,ankit_disgust_03.wav,I just got the message from him.,I just got the message from him.,0,148
+base.en,5,ankit,disgust,ankit_disgust_04.wav,We have to finish this today.,We have put some incidents today.,3,128
+base.en,5,ankit,disgust,ankit_disgust_05.wav,That is what I was talking about.,That means what I was talking about.,1,139
+base.en,5,ankit,disgust,ankit_disgust_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,122
+base.en,5,ankit,disgust,ankit_disgust_07.wav,I did not expect this at all.,I did not expect this at all.,0,143
+base.en,5,ankit,disgust,ankit_disgust_08.wav,It is already very late now.,It's already very late now.,2,122
+base.en,5,ankit,disgust,ankit_disgust_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,115
+base.en,5,ankit,disgust,ankit_disgust_10.wav,I think we should go home.,I think we should go home now.,1,129
+base.en,5,ankit,fear,ankit_fear_01.wav,I am going to the shop now.,And we're going to stop now.,4,122
+base.en,5,ankit,fear,ankit_fear_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,152
+base.en,5,ankit,fear,ankit_fear_03.wav,I just got the message from him.,I just got a message from him.,1,135
+base.en,5,ankit,fear,ankit_fear_04.wav,We have to finish this today.,We have to finish this today.,0,134
+base.en,5,ankit,fear,ankit_fear_05.wav,That is what I was talking about.,That means your time is talking about...,4,147
+base.en,5,ankit,fear,ankit_fear_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,122
+base.en,5,ankit,fear,ankit_fear_07.wav,I did not expect this at all.,I did not expect this at all.,0,135
+base.en,5,ankit,fear,ankit_fear_08.wav,It is already very late now.,It's already very late now.,2,131
+base.en,5,ankit,fear,ankit_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,131
+base.en,5,ankit,fear,ankit_fear_10.wav,I think we should go home.,I think we should go home now.,1,137
+base.en,5,ankit,happy,ankit_happy_01.wav,I am going to the shop now.,I'm going to put this up now.,5,130
+base.en,5,ankit,happy,ankit_happy_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,139
+base.en,5,ankit,happy,ankit_happy_03.wav,I just got the message from him.,I just got the message from him.,0,131
+base.en,5,ankit,happy,ankit_happy_04.wav,We have to finish this today.,We have to finish this today.,0,135
+base.en,5,ankit,happy,ankit_happy_05.wav,That is what I was talking about.,This is what I was talking about.,1,146
+base.en,5,ankit,happy,ankit_happy_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,127
+base.en,5,ankit,happy,ankit_happy_07.wav,I did not expect this at all.,I didn't expect this at all.,2,132
+base.en,5,ankit,happy,ankit_happy_08.wav,It is already very late now.,It's already very late now.,2,132
+base.en,5,ankit,happy,ankit_happy_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,118
+base.en,5,ankit,happy,ankit_happy_10.wav,I think we should go home.,I think we should go home now.,1,141
+base.en,5,ankit,neutral,ankit_neutral_01.wav,I am going to the shop now.,I am going to put this up now.,3,148
+base.en,5,ankit,neutral,ankit_neutral_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,145
+base.en,5,ankit,neutral,ankit_neutral_03.wav,I just got the message from him.,I just got the message from him.,0,129
+base.en,5,ankit,neutral,ankit_neutral_04.wav,We have to finish this today.,We have to finish this today.,0,144
+base.en,5,ankit,neutral,ankit_neutral_05.wav,That is what I was talking about.,That is what I was talking about.,0,150
+base.en,5,ankit,neutral,ankit_neutral_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,130
+base.en,5,ankit,neutral,ankit_neutral_07.wav,I did not expect this at all.,I did not expect this at all.,0,139
+base.en,5,ankit,neutral,ankit_neutral_08.wav,It is already very late now.,It's already very late now.,2,129
+base.en,5,ankit,neutral,ankit_neutral_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,115
+base.en,5,ankit,neutral,ankit_neutral_10.wav,I think we should go home.,I think we should go home.,0,111
+base.en,5,ankit,sad,ankit_sad_01.wav,I am going to the shop now.,I am going a bit of shock now.,4,133
+base.en,5,ankit,sad,ankit_sad_02.wav,The meeting is at five o'clock.,We did start by 4 o'clock.,5,140
+base.en,5,ankit,sad,ankit_sad_03.wav,I just got the message from him.,I just grabbed the misses from him.,2,116
+base.en,5,ankit,sad,ankit_sad_04.wav,We have to finish this today.,We have to finish this today.,0,143
+base.en,5,ankit,sad,ankit_sad_05.wav,That is what I was talking about.,What I was talking about.,2,109
+base.en,5,ankit,sad,ankit_sad_06.wav,Someone is standing at the door.,Someone is standing at the floor.,1,123
+base.en,5,ankit,sad,ankit_sad_07.wav,I did not expect this at all.,I didn't expect this at all.,2,154
+base.en,5,ankit,sad,ankit_sad_08.wav,It is already very late now.,It's already very late now.,2,125
+base.en,5,ankit,sad,ankit_sad_09.wav,Tell me what happened yesterday.,We'll make what happened yesterday.,2,115
+base.en,5,ankit,sad,ankit_sad_10.wav,I think we should go home.,I think we should go home now.,1,134
+base.en,5,priya,angry,priya_angry_01.wav,I am going to the shop now.,"No. No. No, no, no, no, no.",7,157
+base.en,5,priya,angry,priya_angry_02.wav,The meeting is at five o'clock.,That was fiberglass.,6,118
+base.en,5,priya,angry,priya_angry_03.wav,I just got the message from him.,The message from him.,3,98
+base.en,5,priya,angry,priya_angry_04.wav,We have to finish this today.,I have to finish this today.,1,155
+base.en,5,priya,angry,priya_angry_05.wav,That is what I was talking about.,What I was talking about.,2,114
+base.en,5,priya,angry,priya_angry_06.wav,Someone is standing at the door.,Standing at the door.,2,133
+base.en,5,priya,angry,priya_angry_07.wav,I did not expect this at all.,I did not explain this at all now.,2,134
+base.en,5,priya,angry,priya_angry_08.wav,It is already very late now.,We're in late now.,4,103
+base.en,5,priya,angry,priya_angry_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,150
+base.en,5,priya,angry,priya_angry_10.wav,I think we should go home.,All right. Let's go.,5,2410
+base.en,5,priya,disgust,priya_disgust_01.wav,I am going to the shop now.,The shop now.,4,153
+base.en,5,priya,disgust,priya_disgust_02.wav,The meeting is at five o'clock.,Meeting Z5 Book Lock.,5,138
+base.en,5,priya,disgust,priya_disgust_03.wav,I just got the message from him.,Put the message from him.,3,105
+base.en,5,priya,disgust,priya_disgust_04.wav,We have to finish this today.,Finish this today.,3,112
+base.en,5,priya,disgust,priya_disgust_05.wav,That is what I was talking about.,What I was talking about...,2,110
+base.en,5,priya,disgust,priya_disgust_06.wav,Someone is standing at the door.,When you're standing at the door?,2,131
+base.en,5,priya,disgust,priya_disgust_07.wav,I did not expect this at all.,I don't expect this at all.,2,118
+base.en,5,priya,disgust,priya_disgust_08.wav,It is already very late now.,It's very late now.,3,103
+base.en,5,priya,disgust,priya_disgust_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,107
+base.en,5,priya,disgust,priya_disgust_10.wav,I think we should go home.,I think we should go home.,0,128
+base.en,5,priya,fear,priya_fear_01.wav,I am going to the shop now.,"Ankit Dash, Bhubaneswar, Odisha, Bhubaneswar, Odisha.",7,194
+base.en,5,priya,fear,priya_fear_02.wav,The meeting is at five o'clock.,Meetings at five o'clock.,3,144
+base.en,5,priya,fear,priya_fear_03.wav,I just got the message from him.,He got the message from him.,2,116
+base.en,5,priya,fear,priya_fear_04.wav,We have to finish this today.,To finish this week of morning.,5,119
+base.en,5,priya,fear,priya_fear_05.wav,That is what I was talking about.,What I was talking about...,2,108
+base.en,5,priya,fear,priya_fear_06.wav,Someone is standing at the door.,Standing at the door.,2,117
+base.en,5,priya,fear,priya_fear_07.wav,I did not expect this at all.,Did not expect this at all. I don't know.,4,148
+base.en,5,priya,fear,priya_fear_08.wav,It is already very late now.,Already been late now.,3,93
+base.en,5,priya,fear,priya_fear_09.wav,Tell me what happened yesterday.,It will be more what happened yesterday.,4,115
+base.en,5,priya,fear,priya_fear_10.wav,I think we should go home.,Go home.,4,94
+base.en,5,priya,happy,priya_happy_01.wav,I am going to the shop now.,To this shop now.,4,95
+base.en,5,priya,happy,priya_happy_02.wav,The meeting is at five o'clock.,Is that five foot log? Like that. Like that.,9,138
+base.en,5,priya,happy,priya_happy_03.wav,I just got the message from him.,Message from him.,4,98
+base.en,5,priya,happy,priya_happy_04.wav,We have to finish this today.,Finish this today.,3,96
+base.en,5,priya,happy,priya_happy_05.wav,That is what I was talking about.,I was talking about...,3,95
+base.en,5,priya,happy,priya_happy_06.wav,Someone is standing at the door.,Standing at the door.,2,99
+base.en,5,priya,happy,priya_happy_07.wav,I did not expect this at all.,Please head on.,7,105
+base.en,5,priya,happy,priya_happy_08.wav,It is already very late now.,We didn't leave now. We didn't leave now.,7,133
+base.en,5,priya,happy,priya_happy_09.wav,Tell me what happened yesterday.,"It was today, which I love her. I'll present the same as her.",13,175
+base.en,5,priya,happy,priya_happy_10.wav,I think we should go home.,Let's go home.,4,113
+base.en,5,priya,neutral,priya_neutral_01.wav,I am going to the shop now.,"Now, what's up here? We'll just get to the front. We'll get to the front.",13,216
+base.en,5,priya,neutral,priya_neutral_02.wav,The meeting is at five o'clock.,"All right, let's go.",6,2036
+base.en,5,priya,neutral,priya_neutral_03.wav,I just got the message from him.,Thank you.,7,104
+base.en,5,priya,neutral,priya_neutral_04.wav,We have to finish this today.,Finish this today.,3,111
+base.en,5,priya,neutral,priya_neutral_05.wav,That is what I was talking about.,What I was talking about...,2,100
+base.en,5,priya,neutral,priya_neutral_06.wav,Someone is standing at the door.,It's standing at the door.,2,108
+base.en,5,priya,neutral,priya_neutral_07.wav,I did not expect this at all.,Not expect this at all.,2,105
+base.en,5,priya,neutral,priya_neutral_08.wav,It is already very late now.,It's already very late now.,2,111
+base.en,5,priya,neutral,priya_neutral_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,116
+base.en,5,priya,neutral,priya_neutral_10.wav,I think we should go home.,We should go home.,2,148
+base.en,5,priya,sad,priya_sad_01.wav,I am going to the shop now.,This shop now.,5,164
+base.en,5,priya,sad,priya_sad_02.wav,The meeting is at five o'clock.,Is that 5 o'clock?,3,116
+base.en,5,priya,sad,priya_sad_03.wav,I just got the message from him.,Got the message from me.,3,108
+base.en,5,priya,sad,priya_sad_04.wav,We have to finish this today.,To finish this today.,2,118
+base.en,5,priya,sad,priya_sad_05.wav,That is what I was talking about.,What I was talking about.,2,105
+base.en,5,priya,sad,priya_sad_06.wav,Someone is standing at the door.,Standing at the door.,2,114
+base.en,5,priya,sad,priya_sad_07.wav,I did not expect this at all.,"Big this, I know. No, I didn't mean it.",8,163
+base.en,5,priya,sad,priya_sad_08.wav,It is already very late now.,"Ready, very late now.",3,139
+base.en,5,priya,sad,priya_sad_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,112
+base.en,5,priya,sad,priya_sad_10.wav,I think we should go home.,"No, no, no. I'm not going to be mad at the...",11,1855
+small.en,1,ankit,angry,ankit_angry_01.wav,I am going to the shop now.,I am going with the shot now.,2,235
+small.en,1,ankit,angry,ankit_angry_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,238
+small.en,1,ankit,angry,ankit_angry_03.wav,I just got the message from him.,I just got the message from him.,0,230
+small.en,1,ankit,angry,ankit_angry_04.wav,We have to finish this today.,We have to finish this today.,0,225
+small.en,1,ankit,angry,ankit_angry_05.wav,That is what I was talking about.,That is what I was talking about.,0,231
+small.en,1,ankit,angry,ankit_angry_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,239
+small.en,1,ankit,angry,ankit_angry_07.wav,I did not expect this at all.,I didn't expect this at all.,2,233
+small.en,1,ankit,angry,ankit_angry_08.wav,It is already very late now.,It's very late now.,3,211
+small.en,1,ankit,angry,ankit_angry_09.wav,Tell me what happened yesterday.,Tell me what happened the other day.,3,231
+small.en,1,ankit,angry,ankit_angry_10.wav,I think we should go home.,I think we should go home now.,1,242
+small.en,1,ankit,disgust,ankit_disgust_01.wav,I am going to the shop now.,I am going to the shop now.,0,245
+small.en,1,ankit,disgust,ankit_disgust_02.wav,The meeting is at five o'clock.,The meeting is at 5.00.,1,232
+small.en,1,ankit,disgust,ankit_disgust_03.wav,I just got the message from him.,I just got the message from him.,0,228
+small.en,1,ankit,disgust,ankit_disgust_04.wav,We have to finish this today.,We have good feelings today.,3,222
+small.en,1,ankit,disgust,ankit_disgust_05.wav,That is what I was talking about.,That is what I was talking about.,0,240
+small.en,1,ankit,disgust,ankit_disgust_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,221
+small.en,1,ankit,disgust,ankit_disgust_07.wav,I did not expect this at all.,I did not expect this at all.,0,237
+small.en,1,ankit,disgust,ankit_disgust_08.wav,It is already very late now.,It's already very late now.,2,229
+small.en,1,ankit,disgust,ankit_disgust_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,219
+small.en,1,ankit,disgust,ankit_disgust_10.wav,I think we should go home.,I think we should go home now.,1,238
+small.en,1,ankit,fear,ankit_fear_01.wav,I am going to the shop now.,I am going to the shop now.,0,236
+small.en,1,ankit,fear,ankit_fear_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,247
+small.en,1,ankit,fear,ankit_fear_03.wav,I just got the message from him.,I just got the message from him.,0,235
+small.en,1,ankit,fear,ankit_fear_04.wav,We have to finish this today.,We have to finish this today.,0,227
+small.en,1,ankit,fear,ankit_fear_05.wav,That is what I was talking about.,That is what I was talking about.,0,233
+small.en,1,ankit,fear,ankit_fear_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,240
+small.en,1,ankit,fear,ankit_fear_07.wav,I did not expect this at all.,I did not expect this at all.,0,246
+small.en,1,ankit,fear,ankit_fear_08.wav,It is already very late now.,It's already very late now.,2,233
+small.en,1,ankit,fear,ankit_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,214
+small.en,1,ankit,fear,ankit_fear_10.wav,I think we should go home.,I think we should go home now.,1,240
+small.en,1,ankit,happy,ankit_happy_01.wav,I am going to the shop now.,I'm going to put this up now.,5,242
+small.en,1,ankit,happy,ankit_happy_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,248
+small.en,1,ankit,happy,ankit_happy_03.wav,I just got the message from him.,I just got the message from him.,0,233
+small.en,1,ankit,happy,ankit_happy_04.wav,We have to finish this today.,We have to finish this today.,0,227
+small.en,1,ankit,happy,ankit_happy_05.wav,That is what I was talking about.,This is what I was talking about.,1,232
+small.en,1,ankit,happy,ankit_happy_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,223
+small.en,1,ankit,happy,ankit_happy_07.wav,I did not expect this at all.,I didn't expect this at all.,2,230
+small.en,1,ankit,happy,ankit_happy_08.wav,It is already very late now.,It's already very late now.,2,229
+small.en,1,ankit,happy,ankit_happy_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,220
+small.en,1,ankit,happy,ankit_happy_10.wav,I think we should go home.,I think we should go home now.,1,231
+small.en,1,ankit,neutral,ankit_neutral_01.wav,I am going to the shop now.,I am going to put this up now.,3,234
+small.en,1,ankit,neutral,ankit_neutral_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,242
+small.en,1,ankit,neutral,ankit_neutral_03.wav,I just got the message from him.,I just got the message from him.,0,230
+small.en,1,ankit,neutral,ankit_neutral_04.wav,We have to finish this today.,We have to finish this today.,0,232
+small.en,1,ankit,neutral,ankit_neutral_05.wav,That is what I was talking about.,That is what I was talking about.,0,233
+small.en,1,ankit,neutral,ankit_neutral_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,220
+small.en,1,ankit,neutral,ankit_neutral_07.wav,I did not expect this at all.,I did not expect this at all.,0,240
+small.en,1,ankit,neutral,ankit_neutral_08.wav,It is already very late now.,It's already very late now.,2,226
+small.en,1,ankit,neutral,ankit_neutral_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday?,0,213
+small.en,1,ankit,neutral,ankit_neutral_10.wav,I think we should go home.,"Lightning, which should cool home?",4,220
+small.en,1,ankit,sad,ankit_sad_01.wav,I am going to the shop now.,I am going to start now.,2,219
+small.en,1,ankit,sad,ankit_sad_02.wav,The meeting is at five o'clock.,We will start by 2 o'clock.,5,241
+small.en,1,ankit,sad,ankit_sad_03.wav,I just got the message from him.,I just caught the message from him.,1,231
+small.en,1,ankit,sad,ankit_sad_04.wav,We have to finish this today.,We have to finish this today.,0,222
+small.en,1,ankit,sad,ankit_sad_05.wav,That is what I was talking about.,What I was talking about.,2,213
+small.en,1,ankit,sad,ankit_sad_06.wav,Someone is standing at the door.,Someone is standing at the floor.,1,223
+small.en,1,ankit,sad,ankit_sad_07.wav,I did not expect this at all.,I didn't expect this at all.,2,234
+small.en,1,ankit,sad,ankit_sad_08.wav,It is already very late now.,It's already very late now.,2,223
+small.en,1,ankit,sad,ankit_sad_09.wav,Tell me what happened yesterday.,Welcome to what happened yesterday.,2,215
+small.en,1,ankit,sad,ankit_sad_10.wav,I think we should go home.,I think we should go home now.,1,232
+small.en,1,priya,angry,priya_angry_01.wav,I am going to the shop now.,Stop now.,6,187
+small.en,1,priya,angry,priya_angry_02.wav,The meeting is at five o'clock.,That was five of yours.,6,214
+small.en,1,priya,angry,priya_angry_03.wav,I just got the message from him.,The message from him.,3,201
+small.en,1,priya,angry,priya_angry_04.wav,We have to finish this today.,I have to finish this today.,1,217
+small.en,1,priya,angry,priya_angry_05.wav,That is what I was talking about.,What I was talking about.,2,213
+small.en,1,priya,angry,priya_angry_06.wav,Someone is standing at the door.,I'm not standing at the door.,2,230
+small.en,1,priya,angry,priya_angry_07.wav,I did not expect this at all.,I did not expect this at all.,0,231
+small.en,1,priya,angry,priya_angry_08.wav,It is already very late now.,We're in late now.,4,215
+small.en,1,priya,angry,priya_angry_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,192
+small.en,1,priya,angry,priya_angry_10.wav,I think we should go home.,Should go on.,4,194
+small.en,1,priya,disgust,priya_disgust_01.wav,I am going to the shop now.,The shop now.,4,194
+small.en,1,priya,disgust,priya_disgust_02.wav,The meeting is at five o'clock.,Peeting is at 5 o'clock.,2,239
+small.en,1,priya,disgust,priya_disgust_03.wav,I just got the message from him.,Put the message from him.,3,212
+small.en,1,priya,disgust,priya_disgust_04.wav,We have to finish this today.,Finish this today.,3,193
+small.en,1,priya,disgust,priya_disgust_05.wav,That is what I was talking about.,What I was talking about?,2,213
+small.en,1,priya,disgust,priya_disgust_06.wav,Someone is standing at the door.,When you're standing at the door?,2,229
+small.en,1,priya,disgust,priya_disgust_07.wav,I did not expect this at all.,Don't expect this at all.,3,216
+small.en,1,priya,disgust,priya_disgust_08.wav,It is already very late now.,Very late now.,3,194
+small.en,1,priya,disgust,priya_disgust_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,195
+small.en,1,priya,disgust,priya_disgust_10.wav,I think we should go home.,I think we should go home.,0,219
+small.en,1,priya,fear,priya_fear_01.wav,I am going to the shop now.,Please move now.,6,194
+small.en,1,priya,fear,priya_fear_02.wav,The meeting is at five o'clock.,B.D. is at 5 o'clock.,2,256
+small.en,1,priya,fear,priya_fear_03.wav,I just got the message from him.,I got the message from him.,1,222
+small.en,1,priya,fear,priya_fear_04.wav,We have to finish this today.,To finish this today.,2,203
+small.en,1,priya,fear,priya_fear_05.wav,That is what I was talking about.,What I was talking about...,2,216
+small.en,1,priya,fear,priya_fear_06.wav,Someone is standing at the door.,I am standing at the door.,2,218
+small.en,1,priya,fear,priya_fear_07.wav,I did not expect this at all.,Did not expect this at all.,1,225
+small.en,1,priya,fear,priya_fear_08.wav,It is already very late now.,Already very late now.,2,202
+small.en,1,priya,fear,priya_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,227
+small.en,1,priya,fear,priya_fear_10.wav,I think we should go home.,Move on.,6,4641
+small.en,1,priya,happy,priya_happy_01.wav,I am going to the shop now.,Pretty sharp now.,6,199
+small.en,1,priya,happy,priya_happy_02.wav,The meeting is at five o'clock.,Is at 5 o'clock.,2,223
+small.en,1,priya,happy,priya_happy_03.wav,I just got the message from him.,Message from him.,4,209
+small.en,1,priya,happy,priya_happy_04.wav,We have to finish this today.,I finish this today.,3,207
+small.en,1,priya,happy,priya_happy_05.wav,That is what I was talking about.,I was talking about.,3,217
+small.en,1,priya,happy,priya_happy_06.wav,Someone is standing at the door.,Standing at the door.,2,207
+small.en,1,priya,happy,priya_happy_07.wav,I did not expect this at all.,Please say it all.,6,208
+small.en,1,priya,happy,priya_happy_08.wav,It is already very late now.,Pretty late now.,4,192
+small.en,1,priya,happy,priya_happy_09.wav,Tell me what happened yesterday.,"Yesterday,",4,168
+small.en,1,priya,happy,priya_happy_10.wav,I think we should go home.,"Sidd, go home.",4,209
+small.en,1,priya,neutral,priya_neutral_01.wav,I am going to the shop now.,"Now, that's okay. We'll just wait for the time.",9,285
+small.en,1,priya,neutral,priya_neutral_02.wav,The meeting is at five o'clock.,4 o'clock.,5,206
+small.en,1,priya,neutral,priya_neutral_03.wav,I just got the message from him.,Thank you.,7,189
+small.en,1,priya,neutral,priya_neutral_04.wav,We have to finish this today.,Finish this today.,3,194
+small.en,1,priya,neutral,priya_neutral_05.wav,That is what I was talking about.,What I was talking about.,2,210
+small.en,1,priya,neutral,priya_neutral_06.wav,Someone is standing at the door.,Is standing a door?,3,209
+small.en,1,priya,neutral,priya_neutral_07.wav,I did not expect this at all.,Do not expect this at all.,2,227
+small.en,1,priya,neutral,priya_neutral_08.wav,It is already very late now.,It's already very late now.,2,221
+small.en,1,priya,neutral,priya_neutral_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,192
+small.en,1,priya,neutral,priya_neutral_10.wav,I think we should go home.,We should go home.,2,202
+small.en,1,priya,sad,priya_sad_01.wav,I am going to the shop now.,This short now.,6,198
+small.en,1,priya,sad,priya_sad_02.wav,The meeting is at five o'clock.,Is that 5 o'clock?,3,216
+small.en,1,priya,sad,priya_sad_03.wav,I just got the message from him.,Got the message from him?,2,210
+small.en,1,priya,sad,priya_sad_04.wav,We have to finish this today.,"To finish this today,",2,201
+small.en,1,priya,sad,priya_sad_05.wav,That is what I was talking about.,What I was talking about.,2,215
+small.en,1,priya,sad,priya_sad_06.wav,Someone is standing at the door.,Standing at the door.,2,210
+small.en,1,priya,sad,priya_sad_07.wav,I did not expect this at all.,Pick this side one.,6,212
+small.en,1,priya,sad,priya_sad_08.wav,It is already very late now.,"Pretty, very late now.",3,210
+small.en,1,priya,sad,priya_sad_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,200
+small.en,1,priya,sad,priya_sad_10.wav,I think we should go home.,Thank you.,6,3249
+small.en,5,ankit,angry,ankit_angry_01.wav,I am going to the shop now.,I am going with the shot now.,2,273
+small.en,5,ankit,angry,ankit_angry_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,297
+small.en,5,ankit,angry,ankit_angry_03.wav,I just got the message from him.,I just got the message from him.,0,280
+small.en,5,ankit,angry,ankit_angry_04.wav,We have to finish this today.,We have to finish this today.,0,262
+small.en,5,ankit,angry,ankit_angry_05.wav,That is what I was talking about.,That is what I was talking about.,0,271
+small.en,5,ankit,angry,ankit_angry_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,282
+small.en,5,ankit,angry,ankit_angry_07.wav,I did not expect this at all.,I didn't expect this at all.,2,286
+small.en,5,ankit,angry,ankit_angry_08.wav,It is already very late now.,It's very late now.,3,251
+small.en,5,ankit,angry,ankit_angry_09.wav,Tell me what happened yesterday.,Tell me what happened the other day.,3,287
+small.en,5,ankit,angry,ankit_angry_10.wav,I think we should go home.,I think we should go home now.,1,270
+small.en,5,ankit,disgust,ankit_disgust_01.wav,I am going to the shop now.,I am going to the shop now.,0,285
+small.en,5,ankit,disgust,ankit_disgust_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,328
+small.en,5,ankit,disgust,ankit_disgust_03.wav,I just got the message from him.,I just got the message from him.,0,274
+small.en,5,ankit,disgust,ankit_disgust_04.wav,We have to finish this today.,We have good feelings today.,3,273
+small.en,5,ankit,disgust,ankit_disgust_05.wav,That is what I was talking about.,That is what I was talking about.,0,284
+small.en,5,ankit,disgust,ankit_disgust_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,263
+small.en,5,ankit,disgust,ankit_disgust_07.wav,I did not expect this at all.,I did not expect this at all.,0,288
+small.en,5,ankit,disgust,ankit_disgust_08.wav,It is already very late now.,It's already very late now.,2,263
+small.en,5,ankit,disgust,ankit_disgust_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday?,0,267
+small.en,5,ankit,disgust,ankit_disgust_10.wav,I think we should go home.,I think we should go home now.,1,285
+small.en,5,ankit,fear,ankit_fear_01.wav,I am going to the shop now.,I am going to the shop now.,0,270
+small.en,5,ankit,fear,ankit_fear_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,293
+small.en,5,ankit,fear,ankit_fear_03.wav,I just got the message from him.,I just got the message from him.,0,278
+small.en,5,ankit,fear,ankit_fear_04.wav,We have to finish this today.,We have to finish this today.,0,273
+small.en,5,ankit,fear,ankit_fear_05.wav,That is what I was talking about.,That is what I was talking about.,0,278
+small.en,5,ankit,fear,ankit_fear_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,298
+small.en,5,ankit,fear,ankit_fear_07.wav,I did not expect this at all.,I did not expect this at all.,0,289
+small.en,5,ankit,fear,ankit_fear_08.wav,It is already very late now.,It's already very late now.,2,270
+small.en,5,ankit,fear,ankit_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,264
+small.en,5,ankit,fear,ankit_fear_10.wav,I think we should go home.,I think we should go home now.,1,270
+small.en,5,ankit,happy,ankit_happy_01.wav,I am going to the shop now.,I'm going to put this up now.,5,290
+small.en,5,ankit,happy,ankit_happy_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,281
+small.en,5,ankit,happy,ankit_happy_03.wav,I just got the message from him.,I just got the message from him.,0,278
+small.en,5,ankit,happy,ankit_happy_04.wav,We have to finish this today.,We have to finish this today.,0,259
+small.en,5,ankit,happy,ankit_happy_05.wav,That is what I was talking about.,This is what I was talking about.,1,272
+small.en,5,ankit,happy,ankit_happy_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,270
+small.en,5,ankit,happy,ankit_happy_07.wav,I did not expect this at all.,I didn't expect this at all.,2,270
+small.en,5,ankit,happy,ankit_happy_08.wav,It is already very late now.,It's already very late now.,2,257
+small.en,5,ankit,happy,ankit_happy_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday?,0,263
+small.en,5,ankit,happy,ankit_happy_10.wav,I think we should go home.,I think we should go home now.,1,283
+small.en,5,ankit,neutral,ankit_neutral_01.wav,I am going to the shop now.,I am going to put this up now.,3,291
+small.en,5,ankit,neutral,ankit_neutral_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,275
+small.en,5,ankit,neutral,ankit_neutral_03.wav,I just got the message from him.,I just got the message from him.,0,277
+small.en,5,ankit,neutral,ankit_neutral_04.wav,We have to finish this today.,We have to finish this today.,0,257
+small.en,5,ankit,neutral,ankit_neutral_05.wav,That is what I was talking about.,That is what I was talking about.,0,298
+small.en,5,ankit,neutral,ankit_neutral_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,267
+small.en,5,ankit,neutral,ankit_neutral_07.wav,I did not expect this at all.,I did not expect this at all.,0,265
+small.en,5,ankit,neutral,ankit_neutral_08.wav,It is already very late now.,It's already very late now.,2,254
+small.en,5,ankit,neutral,ankit_neutral_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday?,0,262
+small.en,5,ankit,neutral,ankit_neutral_10.wav,I think we should go home.,I think we should go home.,0,266
+small.en,5,ankit,sad,ankit_sad_01.wav,I am going to the shop now.,"I am going, but let's not know.",4,291
+small.en,5,ankit,sad,ankit_sad_02.wav,The meeting is at five o'clock.,We need to start 5 o'clock.,4,277
+small.en,5,ankit,sad,ankit_sad_03.wav,I just got the message from him.,I just got the message from him.,0,294
+small.en,5,ankit,sad,ankit_sad_04.wav,We have to finish this today.,We have to finish this today.,0,268
+small.en,5,ankit,sad,ankit_sad_05.wav,That is what I was talking about.,What I was talking about.,2,258
+small.en,5,ankit,sad,ankit_sad_06.wav,Someone is standing at the door.,Someone is standing at the floor.,1,264
+small.en,5,ankit,sad,ankit_sad_07.wav,I did not expect this at all.,I didn't expect this at all.,2,280
+small.en,5,ankit,sad,ankit_sad_08.wav,It is already very late now.,It's already very late now.,2,256
+small.en,5,ankit,sad,ankit_sad_09.wav,Tell me what happened yesterday.,Welcome to what happened yesterday.,2,262
+small.en,5,ankit,sad,ankit_sad_10.wav,I think we should go home.,I think we should go home now.,1,282
+small.en,5,priya,angry,priya_angry_01.wav,I am going to the shop now.,Stop now.,6,248
+small.en,5,priya,angry,priya_angry_02.wav,The meeting is at five o'clock.,That was five of yours.,6,259
+small.en,5,priya,angry,priya_angry_03.wav,I just got the message from him.,The message from him.,3,236
+small.en,5,priya,angry,priya_angry_04.wav,We have to finish this today.,I have to finish this today.,1,266
+small.en,5,priya,angry,priya_angry_05.wav,That is what I was talking about.,What I was talking about.,2,264
+small.en,5,priya,angry,priya_angry_06.wav,Someone is standing at the door.,Standing at the door.,2,237
+small.en,5,priya,angry,priya_angry_07.wav,I did not expect this at all.,I did not expect this at all.,0,282
+small.en,5,priya,angry,priya_angry_08.wav,It is already very late now.,We're in late now.,4,257
+small.en,5,priya,angry,priya_angry_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,322
+small.en,5,priya,angry,priya_angry_10.wav,I think we should go home.,You should go home.,3,231
+small.en,5,priya,disgust,priya_disgust_01.wav,I am going to the shop now.,The shop now.,4,253
+small.en,5,priya,disgust,priya_disgust_02.wav,The meeting is at five o'clock.,Peeting is at 5 o'clock.,2,281
+small.en,5,priya,disgust,priya_disgust_03.wav,I just got the message from him.,Put the message from him.,3,248
+small.en,5,priya,disgust,priya_disgust_04.wav,We have to finish this today.,Finish this today.,3,250
+small.en,5,priya,disgust,priya_disgust_05.wav,That is what I was talking about.,What I was talking about?,2,257
+small.en,5,priya,disgust,priya_disgust_06.wav,Someone is standing at the door.,When are you standing at the door?,3,277
+small.en,5,priya,disgust,priya_disgust_07.wav,I did not expect this at all.,I don't expect this at all.,2,276
+small.en,5,priya,disgust,priya_disgust_08.wav,It is already very late now.,We're very late now.,3,246
+small.en,5,priya,disgust,priya_disgust_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,227
+small.en,5,priya,disgust,priya_disgust_10.wav,I think we should go home.,I think we should go home.,0,270
+small.en,5,priya,fear,priya_fear_01.wav,I am going to the shop now.,Please move now.,6,1451
+small.en,5,priya,fear,priya_fear_02.wav,The meeting is at five o'clock.,Beaties at 5 o'clock.,3,282
+small.en,5,priya,fear,priya_fear_03.wav,I just got the message from him.,I got the message from him.,1,277
+small.en,5,priya,fear,priya_fear_04.wav,We have to finish this today.,We have to finish this today.,0,270
+small.en,5,priya,fear,priya_fear_05.wav,That is what I was talking about.,What I was talking about...,2,253
+small.en,5,priya,fear,priya_fear_06.wav,Someone is standing at the door.,I'm standing at the door.,2,267
+small.en,5,priya,fear,priya_fear_07.wav,I did not expect this at all.,Did not expect this at all.,1,332
+small.en,5,priya,fear,priya_fear_08.wav,It is already very late now.,Already very late now.,2,271
+small.en,5,priya,fear,priya_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday?,0,263
+small.en,5,priya,fear,priya_fear_10.wav,I think we should go home.,Go home.,4,2745
+small.en,5,priya,happy,priya_happy_01.wav,I am going to the shop now.,Do they show up now?,6,265
+small.en,5,priya,happy,priya_happy_02.wav,The meeting is at five o'clock.,Is at five o'clock.,2,281
+small.en,5,priya,happy,priya_happy_03.wav,I just got the message from him.,Message from him.,4,226
+small.en,5,priya,happy,priya_happy_04.wav,We have to finish this today.,I've finished this today.,4,266
+small.en,5,priya,happy,priya_happy_05.wav,That is what I was talking about.,I was talking about.,3,235
+small.en,5,priya,happy,priya_happy_06.wav,Someone is standing at the door.,Standing at the door.,2,279
+small.en,5,priya,happy,priya_happy_07.wav,I did not expect this at all.,Please say it all.,6,232
+small.en,5,priya,happy,priya_happy_08.wav,It is already very late now.,Pretty late now.,4,235
+small.en,5,priya,happy,priya_happy_09.wav,Tell me what happened yesterday.,"Yesterday,",4,401
+small.en,5,priya,happy,priya_happy_10.wav,I think we should go home.,"Siddhant, go home.",4,265
+small.en,5,priya,neutral,priya_neutral_01.wav,I am going to the shop now.,"Now, that's okay. No, just wait for me, okay?",9,381
+small.en,5,priya,neutral,priya_neutral_02.wav,The meeting is at five o'clock.,4 o'clock.,5,244
+small.en,5,priya,neutral,priya_neutral_03.wav,I just got the message from him.,Thank you very much.,7,240
+small.en,5,priya,neutral,priya_neutral_04.wav,We have to finish this today.,Finish this today.,3,240
+small.en,5,priya,neutral,priya_neutral_05.wav,That is what I was talking about.,What I was talking about.,2,253
+small.en,5,priya,neutral,priya_neutral_06.wav,Someone is standing at the door.,He's standing at the door.,2,276
+small.en,5,priya,neutral,priya_neutral_07.wav,I did not expect this at all.,Do not expect this at all.,2,276
+small.en,5,priya,neutral,priya_neutral_08.wav,It is already very late now.,It's already very late now.,2,276
+small.en,5,priya,neutral,priya_neutral_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,221
+small.en,5,priya,neutral,priya_neutral_10.wav,I think we should go home.,We should go home.,2,307
+small.en,5,priya,sad,priya_sad_01.wav,I am going to the shop now.,The shot now.,5,232
+small.en,5,priya,sad,priya_sad_02.wav,The meeting is at five o'clock.,Is that 5 o'clock?,3,275
+small.en,5,priya,sad,priya_sad_03.wav,I just got the message from him.,Got the message from him?,2,244
+small.en,5,priya,sad,priya_sad_04.wav,We have to finish this today.,To finish this today.,2,236
+small.en,5,priya,sad,priya_sad_05.wav,That is what I was talking about.,What I was talking about.,2,257
+small.en,5,priya,sad,priya_sad_06.wav,Someone is standing at the door.,Standing at the door.,2,273
+small.en,5,priya,sad,priya_sad_07.wav,I did not expect this at all.,"Pick this, I know one.",7,274
+small.en,5,priya,sad,priya_sad_08.wav,It is already very late now.,"Pretty, very late now.",3,251
+small.en,5,priya,sad,priya_sad_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,219
+small.en,5,priya,sad,priya_sad_10.wav,I think we should go home.,Thank you very much.,6,240
+distil-small.en,1,ankit,angry,ankit_angry_01.wav,I am going to the shop now.,I am going to the shot now.,1,172
+distil-small.en,1,ankit,angry,ankit_angry_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,172
+distil-small.en,1,ankit,angry,ankit_angry_03.wav,I just got the message from him.,I just got the message from him.,0,165
+distil-small.en,1,ankit,angry,ankit_angry_04.wav,We have to finish this today.,We have to finish this today.,0,165
+distil-small.en,1,ankit,angry,ankit_angry_05.wav,That is what I was talking about.,That is what I was talking about.,0,160
+distil-small.en,1,ankit,angry,ankit_angry_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,174
+distil-small.en,1,ankit,angry,ankit_angry_07.wav,I did not expect this at all.,I didn't expect this at all.,2,162
+distil-small.en,1,ankit,angry,ankit_angry_08.wav,It is already very late now.,It's very late now.,3,156
+distil-small.en,1,ankit,angry,ankit_angry_09.wav,Tell me what happened yesterday.,Tell me what happened the other day.,3,161
+distil-small.en,1,ankit,angry,ankit_angry_10.wav,I think we should go home.,I think we should go home now.,1,163
+distil-small.en,1,ankit,disgust,ankit_disgust_01.wav,I am going to the shop now.,I am going to the shop now.,0,164
+distil-small.en,1,ankit,disgust,ankit_disgust_02.wav,The meeting is at five o'clock.,"The meeting is at 5, 4,000,000.",3,176
+distil-small.en,1,ankit,disgust,ankit_disgust_03.wav,I just got the message from him.,I just got the message from him.,0,164
+distil-small.en,1,ankit,disgust,ankit_disgust_04.wav,We have to finish this today.,We have good feelings today.,3,161
+distil-small.en,1,ankit,disgust,ankit_disgust_05.wav,That is what I was talking about.,That is what I was talking about.,0,164
+distil-small.en,1,ankit,disgust,ankit_disgust_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,160
+distil-small.en,1,ankit,disgust,ankit_disgust_07.wav,I did not expect this at all.,I did not expect this at all.,0,163
+distil-small.en,1,ankit,disgust,ankit_disgust_08.wav,It is already very late now.,It's already very late now.,2,160
+distil-small.en,1,ankit,disgust,ankit_disgust_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,155
+distil-small.en,1,ankit,disgust,ankit_disgust_10.wav,I think we should go home.,I think we should go home now.,1,163
+distil-small.en,1,ankit,fear,ankit_fear_01.wav,I am going to the shop now.,I am going to the stop now.,1,167
+distil-small.en,1,ankit,fear,ankit_fear_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,165
+distil-small.en,1,ankit,fear,ankit_fear_03.wav,I just got the message from him.,I just got the message from him.,0,163
+distil-small.en,1,ankit,fear,ankit_fear_04.wav,We have to finish this today.,We have to finish this today.,0,166
+distil-small.en,1,ankit,fear,ankit_fear_05.wav,That is what I was talking about.,"That means Ljata, I was talking about.",2,176
+distil-small.en,1,ankit,fear,ankit_fear_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,171
+distil-small.en,1,ankit,fear,ankit_fear_07.wav,I did not expect this at all.,I did not expect this at all.,0,163
+distil-small.en,1,ankit,fear,ankit_fear_08.wav,It is already very late now.,It's already very late now.,2,155
+distil-small.en,1,ankit,fear,ankit_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,160
+distil-small.en,1,ankit,fear,ankit_fear_10.wav,I think we should go home.,I think we should go home now.,1,163
+distil-small.en,1,ankit,happy,ankit_happy_01.wav,I am going to the shop now.,I'm going to stop now.,4,159
+distil-small.en,1,ankit,happy,ankit_happy_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,167
+distil-small.en,1,ankit,happy,ankit_happy_03.wav,I just got the message from him.,I just got the message from him.,0,165
+distil-small.en,1,ankit,happy,ankit_happy_04.wav,We have to finish this today.,We have to finish his today.,1,161
+distil-small.en,1,ankit,happy,ankit_happy_05.wav,That is what I was talking about.,This is what I was talking about.,1,160
+distil-small.en,1,ankit,happy,ankit_happy_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,159
+distil-small.en,1,ankit,happy,ankit_happy_07.wav,I did not expect this at all.,I didn't expect this at all.,2,161
+distil-small.en,1,ankit,happy,ankit_happy_08.wav,It is already very late now.,It's already very late now.,2,160
+distil-small.en,1,ankit,happy,ankit_happy_09.wav,Tell me what happened yesterday.,"Tell me, what happened yesterday?",0,159
+distil-small.en,1,ankit,happy,ankit_happy_10.wav,I think we should go home.,I think we should go home now.,1,164
+distil-small.en,1,ankit,neutral,ankit_neutral_01.wav,I am going to the shop now.,I am going to stop now.,2,164
+distil-small.en,1,ankit,neutral,ankit_neutral_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,168
+distil-small.en,1,ankit,neutral,ankit_neutral_03.wav,I just got the message from him.,I just got the message from him.,0,156
+distil-small.en,1,ankit,neutral,ankit_neutral_04.wav,We have to finish this today.,We have to finish this today.,0,158
+distil-small.en,1,ankit,neutral,ankit_neutral_05.wav,That is what I was talking about.,That is what I was talking about.,0,162
+distil-small.en,1,ankit,neutral,ankit_neutral_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,158
+distil-small.en,1,ankit,neutral,ankit_neutral_07.wav,I did not expect this at all.,I did not expect this at all.,0,163
+distil-small.en,1,ankit,neutral,ankit_neutral_08.wav,It is already very late now.,It's already very late now.,2,164
+distil-small.en,1,ankit,neutral,ankit_neutral_09.wav,Tell me what happened yesterday.,"Tell me, what happened yesterday?",0,156
+distil-small.en,1,ankit,neutral,ankit_neutral_10.wav,I think we should go home.,"Lightning, which showed hope.",6,154
+distil-small.en,1,ankit,sad,ankit_sad_01.wav,I am going to the shop now.,I am going to shock now.,2,163
+distil-small.en,1,ankit,sad,ankit_sad_02.wav,The meeting is at five o'clock.,We did start at 2 o'clock.,4,170
+distil-small.en,1,ankit,sad,ankit_sad_03.wav,I just got the message from him.,I just called the Mrs from him.,2,163
+distil-small.en,1,ankit,sad,ankit_sad_04.wav,We have to finish this today.,We have to finish this today.,0,160
+distil-small.en,1,ankit,sad,ankit_sad_05.wav,That is what I was talking about.,What I was talking about?,2,153
+distil-small.en,1,ankit,sad,ankit_sad_06.wav,Someone is standing at the door.,Someone is standing at the floor.,1,168
+distil-small.en,1,ankit,sad,ankit_sad_07.wav,I did not expect this at all.,I didn't expect this at all.,2,188
+distil-small.en,1,ankit,sad,ankit_sad_08.wav,It is already very late now.,It's already very late now.,2,162
+distil-small.en,1,ankit,sad,ankit_sad_09.wav,Tell me what happened yesterday.,Will make what happened yesterday.,2,154
+distil-small.en,1,ankit,sad,ankit_sad_10.wav,I think we should go home.,I think we should go home now.,1,166
+distil-small.en,1,priya,angry,priya_angry_01.wav,I am going to the shop now.,"The Stop, No.",6,155
+distil-small.en,1,priya,angry,priya_angry_02.wav,The meeting is at five o'clock.,That was Bible Law.,6,151
+distil-small.en,1,priya,angry,priya_angry_03.wav,I just got the message from him.,The Message From Him.,3,156
+distil-small.en,1,priya,angry,priya_angry_04.wav,We have to finish this today.,I have to finish this today.,1,164
+distil-small.en,1,priya,angry,priya_angry_05.wav,That is what I was talking about.,But I was talking about.,3,154
+distil-small.en,1,priya,angry,priya_angry_06.wav,Someone is standing at the door.,Standing at the doors.,3,152
+distil-small.en,1,priya,angry,priya_angry_07.wav,I did not expect this at all.,I did not expect this at all.,0,162
+distil-small.en,1,priya,angry,priya_angry_08.wav,It is already very late now.,Very late now.,3,147
+distil-small.en,1,priya,angry,priya_angry_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,145
+distil-small.en,1,priya,angry,priya_angry_10.wav,I think we should go home.,Should go away.,4,150
+distil-small.en,1,priya,disgust,priya_disgust_01.wav,I am going to the shop now.,"The Shop, now.",4,148
+distil-small.en,1,priya,disgust,priya_disgust_02.wav,The meeting is at five o'clock.,Eating is at five o'clock.,2,165
+distil-small.en,1,priya,disgust,priya_disgust_03.wav,I just got the message from him.,Put the message from him.,3,155
+distil-small.en,1,priya,disgust,priya_disgust_04.wav,We have to finish this today.,Pinnish this today.,4,155
+distil-small.en,1,priya,disgust,priya_disgust_05.wav,That is what I was talking about.,What I was talking about?,2,156
+distil-small.en,1,priya,disgust,priya_disgust_06.wav,Someone is standing at the door.,When you standing at the door?,2,160
+distil-small.en,1,priya,disgust,priya_disgust_07.wav,I did not expect this at all.,Don't expect this at all.,3,162
+distil-small.en,1,priya,disgust,priya_disgust_08.wav,It is already very late now.,Very late now.,3,147
+distil-small.en,1,priya,disgust,priya_disgust_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,147
+distil-small.en,1,priya,disgust,priya_disgust_10.wav,I think we should go home.,I think we should go home.,0,162
+distil-small.en,1,priya,fear,priya_fear_01.wav,I am going to the shop now.,Do they show no?,7,151
+distil-small.en,1,priya,fear,priya_fear_02.wav,The meeting is at five o'clock.,Beaties at 5 o'clock.,3,164
+distil-small.en,1,priya,fear,priya_fear_03.wav,I just got the message from him.,Got the message from him.,2,158
+distil-small.en,1,priya,fear,priya_fear_04.wav,We have to finish this today.,to finish this today.,2,158
+distil-small.en,1,priya,fear,priya_fear_05.wav,That is what I was talking about.,What I was talking about?,2,157
+distil-small.en,1,priya,fear,priya_fear_06.wav,Someone is standing at the door.,"Standing at the door, Me, but I'm gonna try and run.",9,205
+distil-small.en,1,priya,fear,priya_fear_07.wav,I did not expect this at all.,Did not expect this at all.,1,162
+distil-small.en,1,priya,fear,priya_fear_08.wav,It is already very late now.,"Already, very late now.",2,158
+distil-small.en,1,priya,fear,priya_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,154
+distil-small.en,1,priya,fear,priya_fear_10.wav,I think we should go home.,It's all home.,5,153
+distil-small.en,1,priya,happy,priya_happy_01.wav,I am going to the shop now.,Do they show up now?,6,157
+distil-small.en,1,priya,happy,priya_happy_02.wav,The meeting is at five o'clock.,is at 5 o'clock.,2,164
+distil-small.en,1,priya,happy,priya_happy_03.wav,I just got the message from him.,Message from him.,4,149
+distil-small.en,1,priya,happy,priya_happy_04.wav,We have to finish this today.,Finish this today.,3,149
+distil-small.en,1,priya,happy,priya_happy_05.wav,That is what I was talking about.,I was talking about.,3,154
+distil-small.en,1,priya,happy,priya_happy_06.wav,Someone is standing at the door.,Standing at the door.,2,155
+distil-small.en,1,priya,happy,priya_happy_07.wav,I did not expect this at all.,Please add all.,6,147
+distil-small.en,1,priya,happy,priya_happy_08.wav,It is already very late now.,It's late now.,4,231
+distil-small.en,1,priya,happy,priya_happy_09.wav,Tell me what happened yesterday.,"Yesterday, I saw a robbery. I thought, I saw, I saw, and I saw, I saw, and I saw,",19,316
+distil-small.en,1,priya,happy,priya_happy_10.wav,I think we should go home.,Should go home!,3,156
+distil-small.en,1,priya,neutral,priya_neutral_01.wav,I am going to the shop now.,"No. No, it's okay. We'll just go to the top. Okay.",9,237
+distil-small.en,1,priya,neutral,priya_neutral_02.wav,The meeting is at five o'clock.,O'clock. I did not know. I did not know. I could have gone.,13,356
+distil-small.en,1,priya,neutral,priya_neutral_03.wav,I just got the message from him.,Him.,6,1395
+distil-small.en,1,priya,neutral,priya_neutral_04.wav,We have to finish this today.,Finish this today.,3,148
+distil-small.en,1,priya,neutral,priya_neutral_05.wav,That is what I was talking about.,What I was talking about?,2,160
+distil-small.en,1,priya,neutral,priya_neutral_06.wav,Someone is standing at the door.,Is standing at the door?,1,160
+distil-small.en,1,priya,neutral,priya_neutral_07.wav,I did not expect this at all.,Not Expect This At All.,2,156
+distil-small.en,1,priya,neutral,priya_neutral_08.wav,It is already very late now.,It's already very late now.,2,162
+distil-small.en,1,priya,neutral,priya_neutral_09.wav,Tell me what happened yesterday.,What Happened Yesterday?,2,155
+distil-small.en,1,priya,neutral,priya_neutral_10.wav,I think we should go home.,We should go home.,2,154
+distil-small.en,1,priya,sad,priya_sad_01.wav,I am going to the shop now.,The Shod Now.,5,158
+distil-small.en,1,priya,sad,priya_sad_02.wav,The meeting is at five o'clock.,Is that five o'clock?,3,159
+distil-small.en,1,priya,sad,priya_sad_03.wav,I just got the message from him.,Got the message from him.,2,154
+distil-small.en,1,priya,sad,priya_sad_04.wav,We have to finish this today.,To Finish This Today.,2,155
+distil-small.en,1,priya,sad,priya_sad_05.wav,That is what I was talking about.,What I was talking about?,2,157
+distil-small.en,1,priya,sad,priya_sad_06.wav,Someone is standing at the door.,Standing at the door.,2,152
+distil-small.en,1,priya,sad,priya_sad_07.wav,I did not expect this at all.,"Pick this, I know.",6,161
+distil-small.en,1,priya,sad,priya_sad_08.wav,It is already very late now.,"Pretty, very late now.",3,161
+distil-small.en,1,priya,sad,priya_sad_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,147
+distil-small.en,1,priya,sad,priya_sad_10.wav,I think we should go home.,"Oh, Mom, wait, wait. I'm not going to go on.",9,209
+distil-small.en,5,ankit,angry,ankit_angry_01.wav,I am going to the shop now.,I am going with a shot now.,3,206
+distil-small.en,5,ankit,angry,ankit_angry_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,231
+distil-small.en,5,ankit,angry,ankit_angry_03.wav,I just got the message from him.,I just got the message from him.,0,206
+distil-small.en,5,ankit,angry,ankit_angry_04.wav,We have to finish this today.,We have to finish this today.,0,202
+distil-small.en,5,ankit,angry,ankit_angry_05.wav,That is what I was talking about.,That is what I was talking about.,0,209
+distil-small.en,5,ankit,angry,ankit_angry_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,194
+distil-small.en,5,ankit,angry,ankit_angry_07.wav,I did not expect this at all.,I didn't expect this at all.,2,203
+distil-small.en,5,ankit,angry,ankit_angry_08.wav,It is already very late now.,It's very late now.,3,193
+distil-small.en,5,ankit,angry,ankit_angry_09.wav,Tell me what happened yesterday.,Tell me what happened the other day.,3,224
+distil-small.en,5,ankit,angry,ankit_angry_10.wav,I think we should go home.,I think we should go home now.,1,200
+distil-small.en,5,ankit,disgust,ankit_disgust_01.wav,I am going to the shop now.,I am going to the shop now.,0,199
+distil-small.en,5,ankit,disgust,ankit_disgust_02.wav,The meeting is at five o'clock.,"The meeting is at 5, 4,000.",2,215
+distil-small.en,5,ankit,disgust,ankit_disgust_03.wav,I just got the message from him.,I just got the message from him.,0,193
+distil-small.en,5,ankit,disgust,ankit_disgust_04.wav,We have to finish this today.,We have good feelings this today.,2,185
+distil-small.en,5,ankit,disgust,ankit_disgust_05.wav,That is what I was talking about.,That is what I was talking about.,0,202
+distil-small.en,5,ankit,disgust,ankit_disgust_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,185
+distil-small.en,5,ankit,disgust,ankit_disgust_07.wav,I did not expect this at all.,I did not expect this at all.,0,192
+distil-small.en,5,ankit,disgust,ankit_disgust_08.wav,It is already very late now.,It's already very late now.,2,197
+distil-small.en,5,ankit,disgust,ankit_disgust_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,197
+distil-small.en,5,ankit,disgust,ankit_disgust_10.wav,I think we should go home.,I think we should go home now.,1,199
+distil-small.en,5,ankit,fear,ankit_fear_01.wav,I am going to the shop now.,I am going to the stop now.,1,199
+distil-small.en,5,ankit,fear,ankit_fear_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,201
+distil-small.en,5,ankit,fear,ankit_fear_03.wav,I just got the message from him.,I just got the message from him.,0,205
+distil-small.en,5,ankit,fear,ankit_fear_04.wav,We have to finish this today.,We have to finish this today.,0,190
+distil-small.en,5,ankit,fear,ankit_fear_05.wav,That is what I was talking about.,That means Luatai was talking about.,3,214
+distil-small.en,5,ankit,fear,ankit_fear_06.wav,Someone is standing at the door.,"Look, someone is standing at the door.",1,220
+distil-small.en,5,ankit,fear,ankit_fear_07.wav,I did not expect this at all.,I did not expect this at all.,0,208
+distil-small.en,5,ankit,fear,ankit_fear_08.wav,It is already very late now.,It's already very late now.,2,201
+distil-small.en,5,ankit,fear,ankit_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,187
+distil-small.en,5,ankit,fear,ankit_fear_10.wav,I think we should go home.,I think we should go home now.,1,195
+distil-small.en,5,ankit,happy,ankit_happy_01.wav,I am going to the shop now.,I'm going to stop now.,4,196
+distil-small.en,5,ankit,happy,ankit_happy_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,202
+distil-small.en,5,ankit,happy,ankit_happy_03.wav,I just got the message from him.,I just got the message from him.,0,205
+distil-small.en,5,ankit,happy,ankit_happy_04.wav,We have to finish this today.,We have to finish this today.,0,196
+distil-small.en,5,ankit,happy,ankit_happy_05.wav,That is what I was talking about.,This is what I was talking about.,1,201
+distil-small.en,5,ankit,happy,ankit_happy_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,195
+distil-small.en,5,ankit,happy,ankit_happy_07.wav,I did not expect this at all.,I didn't expect this at all.,2,202
+distil-small.en,5,ankit,happy,ankit_happy_08.wav,It is already very late now.,It's already very late now.,2,194
+distil-small.en,5,ankit,happy,ankit_happy_09.wav,Tell me what happened yesterday.,"Tell me, what happened yesterday?",0,187
+distil-small.en,5,ankit,happy,ankit_happy_10.wav,I think we should go home.,I think we should go home now.,1,193
+distil-small.en,5,ankit,neutral,ankit_neutral_01.wav,I am going to the shop now.,I am going to stop now.,2,197
+distil-small.en,5,ankit,neutral,ankit_neutral_02.wav,The meeting is at five o'clock.,The meeting is at 5 o'clock.,0,203
+distil-small.en,5,ankit,neutral,ankit_neutral_03.wav,I just got the message from him.,I just got the message from him.,0,199
+distil-small.en,5,ankit,neutral,ankit_neutral_04.wav,We have to finish this today.,We have to finish this today.,0,202
+distil-small.en,5,ankit,neutral,ankit_neutral_05.wav,That is what I was talking about.,That is what I was talking about.,0,196
+distil-small.en,5,ankit,neutral,ankit_neutral_06.wav,Someone is standing at the door.,Someone is standing at the door.,0,194
+distil-small.en,5,ankit,neutral,ankit_neutral_07.wav,I did not expect this at all.,I did not expect this at all.,0,194
+distil-small.en,5,ankit,neutral,ankit_neutral_08.wav,It is already very late now.,It's already very late now.,2,184
+distil-small.en,5,ankit,neutral,ankit_neutral_09.wav,Tell me what happened yesterday.,"Tell me, what happened yesterday?",0,202
+distil-small.en,5,ankit,neutral,ankit_neutral_10.wav,I think we should go home.,I think we should go home.,0,187
+distil-small.en,5,ankit,sad,ankit_sad_01.wav,I am going to the shop now.,I am going to shock now.,2,190
+distil-small.en,5,ankit,sad,ankit_sad_02.wav,The meeting is at five o'clock.,We did start 5 o'clock.,4,199
+distil-small.en,5,ankit,sad,ankit_sad_03.wav,I just got the message from him.,I just called the Mrs from him.,2,221
+distil-small.en,5,ankit,sad,ankit_sad_04.wav,We have to finish this today.,We have to finish this today.,0,196
+distil-small.en,5,ankit,sad,ankit_sad_05.wav,That is what I was talking about.,What I was talking about?,2,178
+distil-small.en,5,ankit,sad,ankit_sad_06.wav,Someone is standing at the door.,Someone is standing at the floor.,1,206
+distil-small.en,5,ankit,sad,ankit_sad_07.wav,I did not expect this at all.,I didn't expect this at all.,2,189
+distil-small.en,5,ankit,sad,ankit_sad_08.wav,It is already very late now.,It's already very late now.,2,196
+distil-small.en,5,ankit,sad,ankit_sad_09.wav,Tell me what happened yesterday.,Will make what happened yesterday.,2,190
+distil-small.en,5,ankit,sad,ankit_sad_10.wav,I think we should go home.,I think we should go home now.,1,212
+distil-small.en,5,priya,angry,priya_angry_01.wav,I am going to the shop now.,"The Stop, No.",6,177
+distil-small.en,5,priya,angry,priya_angry_02.wav,The meeting is at five o'clock.,That was Bible Law.,6,193
+distil-small.en,5,priya,angry,priya_angry_03.wav,I just got the message from him.,The Message From Him.,3,181
+distil-small.en,5,priya,angry,priya_angry_04.wav,We have to finish this today.,I have to finish this today.,1,194
+distil-small.en,5,priya,angry,priya_angry_05.wav,That is what I was talking about.,But I was talking about.,3,194
+distil-small.en,5,priya,angry,priya_angry_06.wav,Someone is standing at the door.,Standing at the doors.,3,184
+distil-small.en,5,priya,angry,priya_angry_07.wav,I did not expect this at all.,I did not expect this at all.,0,206
+distil-small.en,5,priya,angry,priya_angry_08.wav,It is already very late now.,Very late now.,3,184
+distil-small.en,5,priya,angry,priya_angry_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,176
+distil-small.en,5,priya,angry,priya_angry_10.wav,I think we should go home.,Should go away.,4,230
+distil-small.en,5,priya,disgust,priya_disgust_01.wav,I am going to the shop now.,"The Shop, now.",4,189
+distil-small.en,5,priya,disgust,priya_disgust_02.wav,The meeting is at five o'clock.,Peating is at 5 o'clock.,2,213
+distil-small.en,5,priya,disgust,priya_disgust_03.wav,I just got the message from him.,Put a message from him.,4,193
+distil-small.en,5,priya,disgust,priya_disgust_04.wav,We have to finish this today.,Finish this today.,3,175
+distil-small.en,5,priya,disgust,priya_disgust_05.wav,That is what I was talking about.,What I was talking about?,2,183
+distil-small.en,5,priya,disgust,priya_disgust_06.wav,Someone is standing at the door.,When is standing at the door?,1,200
+distil-small.en,5,priya,disgust,priya_disgust_07.wav,I did not expect this at all.,Don't expect this at all.,3,192
+distil-small.en,5,priya,disgust,priya_disgust_08.wav,It is already very late now.,Very late now.,3,181
+distil-small.en,5,priya,disgust,priya_disgust_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,177
+distil-small.en,5,priya,disgust,priya_disgust_10.wav,I think we should go home.,I think we should go home.,0,186
+distil-small.en,5,priya,fear,priya_fear_01.wav,I am going to the shop now.,Do you know?,7,178
+distil-small.en,5,priya,fear,priya_fear_02.wav,The meeting is at five o'clock.,Beaty is at 5 o'clock.,2,199
+distil-small.en,5,priya,fear,priya_fear_03.wav,I just got the message from him.,Got the message from him.,2,189
+distil-small.en,5,priya,fear,priya_fear_04.wav,We have to finish this today.,to finish this today.,2,182
+distil-small.en,5,priya,fear,priya_fear_05.wav,That is what I was talking about.,What I was talking about?,2,181
+distil-small.en,5,priya,fear,priya_fear_06.wav,Someone is standing at the door.,Standing at the door.,2,196
+distil-small.en,5,priya,fear,priya_fear_07.wav,I did not expect this at all.,Did not expect this at all.,1,201
+distil-small.en,5,priya,fear,priya_fear_08.wav,It is already very late now.,"Already, very late now.",2,182
+distil-small.en,5,priya,fear,priya_fear_09.wav,Tell me what happened yesterday.,Tell me what happened yesterday.,0,199
+distil-small.en,5,priya,fear,priya_fear_10.wav,I think we should go home.,It's all home.,5,171
+distil-small.en,5,priya,happy,priya_happy_01.wav,I am going to the shop now.,Do they show up now?,6,184
+distil-small.en,5,priya,happy,priya_happy_02.wav,The meeting is at five o'clock.,is at 5 o'clock.,2,227
+distil-small.en,5,priya,happy,priya_happy_03.wav,I just got the message from him.,Message from him.,4,177
+distil-small.en,5,priya,happy,priya_happy_04.wav,We have to finish this today.,We've finished this today.,4,197
+distil-small.en,5,priya,happy,priya_happy_05.wav,That is what I was talking about.,I was talking about.,3,182
+distil-small.en,5,priya,happy,priya_happy_06.wav,Someone is standing at the door.,Standing at the door.,2,193
+distil-small.en,5,priya,happy,priya_happy_07.wav,I did not expect this at all.,Please add all.,6,180
+distil-small.en,5,priya,happy,priya_happy_08.wav,It is already very late now.,Did he live now?,5,176
+distil-small.en,5,priya,happy,priya_happy_09.wav,Tell me what happened yesterday.,"Yesterday, ... ... ...",4,283
+distil-small.en,5,priya,happy,priya_happy_10.wav,I think we should go home.,"Shit, go home!",4,177
+distil-small.en,5,priya,neutral,priya_neutral_01.wav,I am going to the shop now.,"No. No, it's okay. It's okay. It's good.",8,309
+distil-small.en,5,priya,neutral,priya_neutral_02.wav,The meeting is at five o'clock.,"O'clock. Let's see, let me know. I'm right here now.",10,448
+distil-small.en,5,priya,neutral,priya_neutral_03.wav,I just got the message from him.,Him.,6,1678
+distil-small.en,5,priya,neutral,priya_neutral_04.wav,We have to finish this today.,Finish this today.,3,191
+distil-small.en,5,priya,neutral,priya_neutral_05.wav,That is what I was talking about.,What I was talking about?,2,199
+distil-small.en,5,priya,neutral,priya_neutral_06.wav,Someone is standing at the door.,Is standing at the door?,1,191
+distil-small.en,5,priya,neutral,priya_neutral_07.wav,I did not expect this at all.,Not expect this at all.,2,192
+distil-small.en,5,priya,neutral,priya_neutral_08.wav,It is already very late now.,It's already very late now.,2,200
+distil-small.en,5,priya,neutral,priya_neutral_09.wav,Tell me what happened yesterday.,What Happened Yesterday?,2,177
+distil-small.en,5,priya,neutral,priya_neutral_10.wav,I think we should go home.,We should go home.,2,180
+distil-small.en,5,priya,sad,priya_sad_01.wav,I am going to the shop now.,This shot now.,6,173
+distil-small.en,5,priya,sad,priya_sad_02.wav,The meeting is at five o'clock.,Is that five o'clock?,3,198
+distil-small.en,5,priya,sad,priya_sad_03.wav,I just got the message from him.,Got the message from him.,2,186
+distil-small.en,5,priya,sad,priya_sad_04.wav,We have to finish this today.,to finish this today.,2,188
+distil-small.en,5,priya,sad,priya_sad_05.wav,That is what I was talking about.,What I was talking about?,2,195
+distil-small.en,5,priya,sad,priya_sad_06.wav,Someone is standing at the door.,Standing at the door.,2,181
+distil-small.en,5,priya,sad,priya_sad_07.wav,I did not expect this at all.,"Pick this, I know.",6,212
+distil-small.en,5,priya,sad,priya_sad_08.wav,It is already very late now.,"Pretty, very late now.",3,196
+distil-small.en,5,priya,sad,priya_sad_09.wav,Tell me what happened yesterday.,What happened yesterday?,2,182
+distil-small.en,5,priya,sad,priya_sad_10.wav,I think we should go home.,"Oh, Mom, wait, wait. I'm not going to go on.",9,252
