@@ -320,13 +320,31 @@ const EMOTION_VA = {
   disgust: [-0.7, 0.25],
 };
 
+// Week 4 feature: the 12 training scenarios (same ids as the backend's
+// negotiation.SCENARIOS; the backend sends the full list once training starts)
+const SCENARIO_LIST = [
+  { id: 'office_lockin', name: 'Arjun', pronoun: 'him', title: 'Locked-in office worker', level: 'Hard', start: 85 },
+  { id: 'flight_cancelled', name: 'Meera', pronoun: 'her', title: 'Cancelled flight at the airport', level: 'Medium', start: 75 },
+  { id: 'exam_failed', name: 'Rohan', pronoun: 'him', title: 'Student who failed an exam', level: 'Easy', start: 70 },
+  { id: 'noisy_neighbour', name: 'Mr. Sharma', pronoun: 'him', title: 'Angry neighbour at midnight', level: 'Easy', start: 70 },
+  { id: 'hospital_wait', name: 'Kavya', pronoun: 'her', title: 'Worried daughter at the hospital', level: 'Medium', start: 80 },
+  { id: 'loan_rejected', name: 'Vikram', pronoun: 'him', title: 'Loan rejected at the bank', level: 'Medium', start: 80 },
+  { id: 'fake_complaint', name: 'Sameer', pronoun: 'him', title: 'Delivery partner and a fake complaint', level: 'Easy', start: 70 },
+  { id: 'unpaid_salary', name: 'Raju', pronoun: 'him', title: 'Unpaid factory worker at the gate', level: 'Hard', start: 85 },
+  { id: 'child_late', name: 'Neha', pronoun: 'her', title: 'Parent whose child is late from school', level: 'Hard', start: 90 },
+  { id: 'road_accident', name: 'Ajay', pronoun: 'him', title: 'Driver after a minor road accident', level: 'Medium', start: 80 },
+  { id: 'online_fraud', name: 'Mrs. Iyer', pronoun: 'her', title: 'Senior citizen after an online fraud', level: 'Medium', start: 75 },
+  { id: 'eviction', name: 'Karan', pronoun: 'him', title: 'Tenant told to leave suddenly', level: 'Medium', start: 75 },
+];
+const findScenario = (id) => SCENARIO_LIST.find((x) => x.id === id) || SCENARIO_LIST[0];
+
 // Training caller: agitation 100 -> upset & tense, 0 -> calm & settled
 const agitationToVA = (a) => [0.55 - (a / 100) * 1.35, (a / 100) * 1.5 - 0.7];
 
 const agitationColor = (a) =>
   a >= 70 ? '#f87171' : a >= 45 ? '#fbbf24' : a > 30 ? '#a3e635' : '#34d399';
 
-const EmotionMap = ({ you, caller }) => {
+const EmotionMap = ({ you, caller, callerName = 'Caller' }) => {
   const size = 260;
   const pad = 22;
   const toXY = ([v, a]) => [
@@ -375,7 +393,7 @@ const EmotionMap = ({ you, caller }) => {
         const [x, y] = toXY(va);
         return <text key={k} x={x} y={y} textAnchor="middle" className="va-label">{k}</text>;
       })}
-      {trail(caller, '#f87171', 'Arjun')}
+      {trail(caller, '#f87171', callerName)}
       {trail(you, '#38e1ff', 'You')}
     </svg>
   );
@@ -620,6 +638,9 @@ function App() {
   // { scenario, agitation, start, goal, history: [..], steps: [{delta, reasons}] }
   const [training, setTraining] = useState(null);
   const [showScore, setShowScore] = useState(false);
+  // Week 4: which of the 12 scenarios is picked
+  const [scenarioId, setScenarioId] = useState('office_lockin');
+  const scenarioIdRef = useRef('office_lockin');
 
   // Week 3 Day 4: one latency breakdown per turn (from 'turn_metrics')
   const [turnMetrics, setTurnMetrics] = useState([]);
@@ -1316,7 +1337,7 @@ function App() {
       const channel = dataChannelRef.current;
       if (channel && channel.readyState === 'open') {
         try {
-          channel.send(JSON.stringify({ type: 'set_mode', mode: appModeRef.current }));
+          channel.send(JSON.stringify({ type: 'set_mode', mode: appModeRef.current, scenario: scenarioIdRef.current }));
           modeSyncedRef.current = true;
         } catch (err) {
           console.warn('[MODE] could not send mode:', err);
@@ -1329,13 +1350,17 @@ function App() {
       case 'mode':
         if (data.mode === 'training') {
           setTraining({
-            scenario: data.scenario || null,
+            scenario: data.scenario ? { ...findScenario(data.scenario.id), ...data.scenario } : null,
             agitation: data.agitation ?? 85,
             start: data.agitation ?? 85,
             goal: data.goal ?? 30,
             history: [data.agitation ?? 85],
             steps: [],
           });
+          if (data.scenario?.id) {
+            scenarioIdRef.current = data.scenario.id;
+            setScenarioId(data.scenario.id);
+          }
           addEvent(`Training mode on: ${data.scenario?.title ?? 'scenario'}`);
         } else {
           setTraining(null);
@@ -2150,11 +2175,14 @@ function App() {
     (lastTurn && (lastTurn.aiState === 'waiting' || lastTurn.aiState === 'streaming') &&
       vadState !== 'ai_speaking' && vadState !== 'speaking');
 
+  // Week 4: the person Auralis plays in training mode
+  const caller = training?.scenario || findScenario(scenarioId);
+
   const xpPhase = !isLive
     ? isConnecting
       ? { key: 'connecting', title: 'Connecting…', sub: 'Setting up a private voice line' }
       : appMode === 'training'
-        ? { key: 'ready', title: 'Negotiation training', sub: 'Start, introduce yourself to Arjun and calm him down' }
+        ? { key: 'ready', title: 'Negotiation training', sub: `Pick a scenario, start, and calm ${caller.name} down` }
         : { key: 'ready', title: 'Talk to Auralis', sub: 'Start a conversation and just speak' }
     : vadState === 'speaking'
       ? { key: 'listening', title: 'Listening', sub: 'Pause when you are done' }
@@ -2162,12 +2190,12 @@ function App() {
         ? { key: 'stopped', title: 'Stopped', sub: 'Go ahead, I am listening' }
         : vadState === 'ai_speaking'
           ? appMode === 'training'
-            ? { key: 'speaking', title: 'Arjun is speaking', sub: 'Talking over him raises his agitation' }
+            ? { key: 'speaking', title: `${caller.name} is speaking`, sub: `Talking over ${caller.pronoun} raises the agitation` }
             : { key: 'speaking', title: 'Auralis is speaking', sub: 'Talk over me any time to interrupt' }
           : isThinking
             ? { key: 'thinking', title: 'Thinking', sub: 'Understanding your words and your tone' }
             : appMode === 'training'
-              ? { key: 'idle', title: 'Your turn', sub: 'Arjun is waiting. Speak slowly and calmly.' }
+              ? { key: 'idle', title: 'Your turn', sub: `${caller.name} is waiting. Speak slowly and calmly.` }
               : { key: 'idle', title: 'I am listening', sub: 'Say something whenever you are ready' };
 
   const switchMode = (mode) => {
@@ -2180,7 +2208,7 @@ function App() {
     const channel = dataChannelRef.current;
     if (channel && channel.readyState === 'open') {
       try {
-        channel.send(JSON.stringify({ type: 'set_mode', mode }));
+        channel.send(JSON.stringify({ type: 'set_mode', mode, scenario: scenarioIdRef.current }));
         modeSyncedRef.current = true;
       } catch (err) {
         console.warn('[MODE] could not send mode:', err);
@@ -2188,13 +2216,21 @@ function App() {
     }
   };
 
-  const restartTraining = () => {
+  const restartTraining = (id = scenarioIdRef.current) => {
+    scenarioIdRef.current = id;
+    setScenarioId(id);
     setShowScore(false);
+    setTraining(null);
     clearHistory();
     const channel = dataChannelRef.current;
     if (channel && channel.readyState === 'open') {
-      channel.send(JSON.stringify({ type: 'set_mode', mode: 'training' }));
+      channel.send(JSON.stringify({ type: 'set_mode', mode: 'training', scenario: id }));
     }
+  };
+
+  const pickRandomScenario = () => {
+    const others = SCENARIO_LIST.filter((x) => x.id !== scenarioIdRef.current);
+    restartTraining(others[Math.floor(Math.random() * others.length)].id);
   };
 
   // Week 4: score card numbers
@@ -2440,23 +2476,40 @@ function App() {
                     )}
                   </div>
 
+                  <div className="scenario-picker">
+                    <label htmlFor="scenario-select">Scenario</label>
+                    <select id="scenario-select" value={scenarioId}
+                      onChange={(e) => restartTraining(e.target.value)}>
+                      {SCENARIO_LIST.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.name}: {x.title} ({x.level})
+                        </option>
+                      ))}
+                    </select>
+                    <button className="xp-link" onClick={pickRandomScenario}>Random</button>
+                  </div>
+                  <div className="scenario-meta">
+                    <span className={`level-badge level-${caller.level.toLowerCase()}`}>{caller.level}</span>
+                    <span className="xp-muted">starts at {caller.start} agitation · 12 scenarios</span>
+                  </div>
+
                   <p className="training-brief">
                     {training?.scenario?.brief ??
-                      'Start the conversation: Auralis plays Arjun, a distressed caller. Your job is to calm him down.'}
+                      `Auralis plays ${caller.name} (${caller.title.toLowerCase()}). Start the conversation and calm ${caller.pronoun} down.`}
                   </p>
 
                   <div className="agitation">
                     <div className="agitation-head">
-                      <span>Arjun's agitation</span>
-                      <strong style={{ color: agitationColor(training?.agitation ?? 85) }}>
-                        {training?.agitation ?? 85}
+                      <span>{caller.name}'s agitation</span>
+                      <strong style={{ color: agitationColor(training?.agitation ?? caller.start) }}>
+                        {training?.agitation ?? caller.start}
                       </strong>
                     </div>
                     <div className="agitation-track">
                       <div className="agitation-goal" style={{ left: `${training?.goal ?? 30}%` }} title="goal" />
                       <div className="agitation-fill" style={{
-                        width: `${training?.agitation ?? 85}%`,
-                        background: agitationColor(training?.agitation ?? 85),
+                        width: `${training?.agitation ?? caller.start}%`,
+                        background: agitationColor(training?.agitation ?? caller.start),
                       }} />
                     </div>
                     <div className="agitation-scale"><span>calm</span><span>goal ≤ {training?.goal ?? 30}</span><span>panic</span></div>
@@ -2475,7 +2528,7 @@ function App() {
                     </ul>
                   ) : (
                     <p className="training-tip">
-                      Tips: introduce yourself, listen, name his feelings, speak slowly. Avoid "calm down", threats and talking over him.
+                      Tips: introduce yourself, listen, name {caller.pronoun === 'her' ? 'her' : 'his'} feelings, speak slowly. Avoid "calm down", threats and talking over {caller.pronoun}.
                     </p>
                   )}
                 </div>
@@ -2486,10 +2539,10 @@ function App() {
                   <span>Emotion map</span>
                   <span className="xp-muted">arousal × valence</span>
                 </div>
-                <EmotionMap you={youPoints} caller={callerPoints} />
+                <EmotionMap you={youPoints} caller={callerPoints} callerName={appMode === 'training' ? caller.name : 'Caller'} />
                 <p className="xp-muted va-note">
                   {appMode === 'training'
-                    ? 'Blue: your tone each turn. Red: Arjun moving from panic toward calm.'
+                    ? `Blue: your tone each turn. Red: ${caller.name} moving from panic toward calm.`
                     : 'Your detected emotion each turn (last 10).'}
                 </p>
               </div>
@@ -2499,7 +2552,7 @@ function App() {
             {showScore && trainingScore && (
               <div className="score-overlay" role="dialog" aria-modal="true" aria-label="Training score">
                 <div className="score-card">
-                  <p className="score-kicker">Negotiation debrief</p>
+                  <p className="score-kicker">Negotiation debrief · {caller.name}, {caller.title.toLowerCase()}</p>
                   <h2 className={trainingScore.success ? 'score-pass' : 'score-fail'}>
                     {trainingScore.success ? 'De-escalated' : 'Not de-escalated yet'}
                   </h2>
@@ -2510,17 +2563,18 @@ function App() {
                     <div><strong>{trainingScore.n ? Math.round((trainingScore.calm / trainingScore.n) * 100) : 0}%</strong><span>calm tone</span></div>
                     <div><strong>{trainingScore.empathy}</strong><span>empathy turns</span></div>
                     <div><strong>{trainingScore.escalating}</strong><span>escalating turns</span></div>
-                    <div><strong>{trainingScore.talkedOver}</strong><span>talked over him</span></div>
+                    <div><strong>{trainingScore.talkedOver}</strong><span>talked over {caller.pronoun}</span></div>
                   </div>
                   <p className="score-tip">
                     {trainingScore.success
-                      ? 'Well done: calm tone and empathy brought Arjun down. Next time try fewer turns.'
+                      ? `Well done: calm tone and empathy brought ${caller.name} down. Next time try fewer turns or a harder scenario.`
                       : trainingScore.escalating > 0
-                        ? 'Commands like "calm down" or threats pushed him up. Name his feelings instead.'
+                        ? `Commands like "calm down" or threats pushed ${caller.pronoun} up. Name the feelings instead.`
                         : 'Keep a calm tone, acknowledge his feelings and ask open questions.'}
                   </p>
                   <div className="score-actions">
-                    <button className="xp-btn xp-btn-primary" onClick={restartTraining}>Try again</button>
+                    <button className="xp-btn xp-btn-primary" onClick={() => restartTraining()}>Try again</button>
+                    <button className="xp-btn xp-btn-ghost" onClick={pickRandomScenario}>New scenario</button>
                     <button className="xp-btn xp-btn-ghost" onClick={() => setShowScore(false)}>Close</button>
                   </div>
                 </div>
