@@ -352,20 +352,22 @@ class IncomingAudioTrack:
         })
         return True
 
-    def set_mode(self, mode):
-        """Week 4: switch between the assistant and the negotiation trainer."""
+    def set_mode(self, mode, scenario=None):
+        """Week 4: switch between the assistant and the negotiation trainer
+        (scenario = one of negotiation.SCENARIOS ids, e.g. "flight_cancelled")."""
         mode = "training" if mode == "training" else "assistant"
         if self._interrupt("manual", since=time.perf_counter()) and self.running:
             self._idle_or_speaking()
         self.mode = mode
         self.history = []                     # new role, new conversation
         self.trainee_interrupted = False
-        self.training = negotiation.NegotiationSession() if mode == "training" else None
-        print(f"[MODE] {mode}")
+        self.training = negotiation.NegotiationSession(scenario) if mode == "training" else None
+        print(f"[MODE] {mode}" + (f" | scenario {self.training.scenario['id']}" if self.training else ""))
         event = {"type": "mode", "mode": mode}
         if self.training:
             event.update(
-                scenario=negotiation.SCENARIO,
+                scenario=self.training.scenario,
+                scenarios=negotiation.catalog(),
                 agitation=self.training.agitation,
                 goal=negotiation.CALM_GOAL,
             )
@@ -775,7 +777,7 @@ class IncomingAudioTrack:
             # Week 4: Llama plays the caller at the current agitation level
             messages = ollama_client.build_training_messages(
                 self.history, transcript,
-                negotiation.system_prompt(self.training.agitation),
+                self.training.prompt(),
             )
         else:
             messages = ollama_client.build_messages(

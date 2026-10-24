@@ -112,9 +112,10 @@ async def offer(request):
             if data.get("type") == "interrupt" and audio_processor is not None:
                 audio_processor.request_interrupt("manual")
 
-            # Week 4: {"type": "set_mode", "mode": "training" | "assistant"}
+            # Week 4: {"type": "set_mode", "mode": "training" | "assistant",
+            #          "scenario": "<id from negotiation.SCENARIOS>" (optional)}
             if data.get("type") == "set_mode" and audio_processor is not None:
-                audio_processor.set_mode(data.get("mode", "assistant"))
+                audio_processor.set_mode(data.get("mode", "assistant"), data.get("scenario"))
 
         @channel.on("close")
         def on_close():
