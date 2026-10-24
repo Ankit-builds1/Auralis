@@ -95,6 +95,14 @@ def build_messages(history, transcript, emotion=None, hint=None):
     messages.append({"role": "user", "content": user_content})
     return messages
 
+def build_training_messages(history, transcript, system_prompt):
+    """Week 4 Training Mode: Llama plays the caller (system_prompt = persona)."""
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(history)
+    messages.append({"role": "user", "content": f'Negotiator: "{transcript}"'})
+    return messages
+
+
 async def stream_reply(messages, session=None):
     """
     Async generator: yields reply tokens as soon as Ollama produces them.

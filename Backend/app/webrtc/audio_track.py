@@ -11,6 +11,7 @@ from pathlib import Path
 from app.audio.processor import AudioProcessor
 from app.llm import ollama_client
 from app.ml_clients import emotion_engine, text_emotion
+from app.training import negotiation
 from app.stt.engine import get_stt
 from app.tts import engine as tts_engine
 
@@ -202,6 +203,11 @@ class IncomingAudioTrack:
         self.user_level_db = None        # median of user_levels (once trusted)
         self.segment_loud_frames = 0     # voiced frames above the gate, this segment
 
+        # ---- Week 4 feature: crisis negotiation training mode ----
+        self.mode = "assistant"
+        self.training = None
+        self.trainee_interrupted = False   # trainee talked over the caller
+
         # ---- Week 4 (ML): personal voice-emotion baseline ----
         self.voice_baseline = None       # {label: avg prob} on neutral-word turns
         self.voice_baseline_turns = 0
@@ -325,6 +331,8 @@ class IncomingAudioTrack:
         self.reply_active = False
         self.ai_speaking = False
         self.ai_finished_at = now
+        if reason == "barge_in" and self.mode == "training":
+            self.trainee_interrupted = True
 
         stop_ms = round((now - since) * 1000) if since else 0
 
@@ -343,6 +351,25 @@ class IncomingAudioTrack:
             "user_level_db": self.user_level_db,
         })
         return True
+
+    def set_mode(self, mode):
+        """Week 4: switch between the assistant and the negotiation trainer."""
+        mode = "training" if mode == "training" else "assistant"
+        if self._interrupt("manual", since=time.perf_counter()) and self.running:
+            self._idle_or_speaking()
+        self.mode = mode
+        self.history = []                     # new role, new conversation
+        self.trainee_interrupted = False
+        self.training = negotiation.NegotiationSession() if mode == "training" else None
+        print(f"[MODE] {mode}")
+        event = {"type": "mode", "mode": mode}
+        if self.training:
+            event.update(
+                scenario=negotiation.SCENARIO,
+                agitation=self.training.agitation,
+                goal=negotiation.CALM_GOAL,
+            )
+        self.send_event(event)
 
     def request_interrupt(self, reason="manual"):
         """Called from server.py when the browser sends {"type": "interrupt"}."""
@@ -711,6 +738,14 @@ class IncomingAudioTrack:
                         "ready_ms": emotion["ready_ms"],
                     })
 
+                # ---- Week 4: training mode -> update the caller's agitation ----
+                if self.mode == "training" and self.training is not None:
+                    state = self.training.update(transcript, emotion, self.trainee_interrupted)
+                    self.trainee_interrupted = False
+                    print(f"[TRAINING] agitation {state['agitation']} "
+                          f"({state['delta']:+d}: {', '.join(state['reasons'])})")
+                    self.send_event(state)
+
                 reply = await self._stream_llm_reply(transcript, speech_end_time, emotion)
 
                 # ---- Week 3 Day 4: one latency breakdown per turn ----
@@ -733,15 +768,28 @@ class IncomingAudioTrack:
     async def _stream_llm_reply(self, transcript, speech_end_time, emotion=None):
         use_emotion = emotion is not None and emotion["confident"]
 
-        messages = ollama_client.build_messages(
-            self.history,
-            transcript,
-            emotion=emotion["label"] if use_emotion else None,
-            hint=emotion["hint"] if use_emotion else None,
-        )
+        training = (self.mode == "training" and self.training is not None
+                    and not ollama_client.is_crisis(transcript))
+
+        if training:
+            # Week 4: Llama plays the caller at the current agitation level
+            messages = ollama_client.build_training_messages(
+                self.history, transcript,
+                negotiation.system_prompt(self.training.agitation),
+            )
+        else:
+            messages = ollama_client.build_messages(
+                self.history,
+                transcript,
+                emotion=emotion["label"] if use_emotion else None,
+                hint=emotion["hint"] if use_emotion else None,
+            )
 
         # ---- Week 3 Day 3: speak the reply while it is being written ----
-        voice_group = emotion["group"] if use_emotion else "okay"
+        if training:
+            voice_group = negotiation.voice_group(self.training.agitation)
+        else:
+            voice_group = emotion["group"] if use_emotion else "okay"
         speak = self._tts_on()
         splitter = tts_engine.SentenceSplitter()
         sentence_queue = asyncio.Queue() if speak else None
