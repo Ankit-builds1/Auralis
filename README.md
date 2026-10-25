@@ -6,6 +6,8 @@ A React + native WebRTC dashboard that streams live microphone audio to the Aura
 
 Part of Infotact Solutions' *Advanced Generative AI Engineering* internship (Project 2).
 
+**Live demo:** https://auralis-hazel.vercel.app (hybrid deployment: the page is on Vercel, the GPU backend runs on a team laptop, so the live AI answers only while that laptop is online).
+
 | Role | Owner | Branch |
 |---|---|---|
 | **Frontend: WebRTC client + live dashboard (this module)** | Ankit Dash | `frontend` |
@@ -52,7 +54,19 @@ flowchart LR
 
 ## Features
 
-### Week 3 (new)
+### Week 4 (new)
+
+| Feature | What it does |
+|---|---|
+| **Barge-in (interruption)** | Talk over Auralis and it stops within ~200-450 ms; a Stop button does the same; the UI shows `interrupted` with how much audio was dropped |
+| **Waveform visualiser** | Live waveforms for the user's microphone and for Auralis's voice (Web Audio `AnalyserNode`), plus an animated orb that reacts to both |
+| **Experience view** | A clean demo view (orb, phase text, chat) next to the Engineer view with all metrics; the choice is remembered per browser |
+| **Negotiation training mode** | The PROJECT.pdf use case: Auralis plays a distressed person, the user is the trainee negotiator. Agitation meter (0-100), per-turn reasons, score card at the end |
+| **12 training scenarios** | Scenario picker (Easy / Medium / Hard) and a Random button: locked-in office worker, cancelled flight, failed exam, noisy neighbour, hospital wait, rejected loan, fake complaint, unpaid salary, late child, road accident, online fraud, eviction |
+| **Emotion map** | Arousal x valence chart: blue trail = the user's tone per turn, red trail = the caller calming down from panic |
+| **Deployment** | Built on Vercel; backend URL and TURN server come from Vite env variables |
+
+### Week 3
 
 | Feature | What it does |
 |---|---|
@@ -102,9 +116,14 @@ The frontend opens a DataChannel labelled `vad-state`. The backend sends JSON me
 | `tts_end` | `sentences, audio_ms, underruns` | Marks the reply as spoken |
 | `turn_metrics` | `stt_ms, emotion_ms, ttft_ms, first_piece_ms, ttfa_ms, first_synth_ms, total_ms, voice` | One row in the latency breakdown |
 | `echo_ignored` | — | Increments the echo counter |
+| `interrupted` | `reason, stop_ms, spoken_ms, dropped_ms` | Marks the reply as cut off (barge-in or Stop button) |
+| `mode` | `mode, scenario, scenarios, agitation, goal` | Switches between assistant and training mode |
+| `training_state` | `agitation, delta, reasons, turn, start, goal, scenario_id` | Moves the agitation meter, adds a step to the training log |
 | `llm_error` / `tts_error` / `audio_error` | `error` | Shows / logs the error |
 
 **One turn:** `vad: speaking` → `vad: processing` → `transcript` → `emotion` → `llm_start` → `llm_token` × N → `tts_start` → `tts_sentence` × N → `llm_done` → `tts_end` → `turn_metrics` → `vad: idle`
+
+The frontend sends: `{"type": "interrupt"}` (Stop button) and `{"type": "set_mode", "mode": "assistant" | "training", "scenario": "<id>"}`.
 
 All timings are measured by the backend **from the moment the VAD detects end of speech**, so network delay doesn't distort them.
 
@@ -184,6 +203,28 @@ npm run dev -- --mode priya    # teammate's backend
 
 **Usage:** START MIC → CONNECT → wait for ICE State `connected` → speak, then pause. The system chips show which backend (CPU / GPU) you are talking to.
 
+### Deployment (Week 4): Vercel + Cloudflare Tunnel + TURN
+
+```
+Browser ──► Vercel (this frontend, static)
+   ├─ signalling (HTTPS) ──► Cloudflare Tunnel ──► laptop backend :8001 (GPU)
+   └─ audio (WebRTC) ──────► Metered TURN relay ──► laptop backend
+```
+
+1. Backend laptop: start Ollama and the backend; in the backend `.env` set `CORS_ORIGINS=https://<app>.vercel.app` and the `TURN_*` values.
+2. `cloudflared tunnel --url http://localhost:8001` → copy the `https://….trycloudflare.com` URL.
+3. Vercel project: Root Directory `frontend`, Framework `Vite`, Production Branch `frontend`, and these Environment Variables:
+
+| Variable | Value |
+|---|---|
+| `VITE_BACKEND_URL` | the tunnel URL (no trailing `/`) |
+| `VITE_TURN_URL` | `turn:global.relay.metered.ca:443?transport=tcp` |
+| `VITE_TURN_USERNAME` / `VITE_TURN_CREDENTIAL` | from the Metered dashboard |
+
+4. Redeploy after changing a variable (Vite bakes them in at build time). A quick tunnel gets a new URL on every restart.
+
+Why hybrid: the backend needs a GPU (Whisper, WavLM-Large, Llama 3.2 3B and Piper together), which free cloud hosting does not offer.
+
 ---
 
 ## Troubleshooting
@@ -249,6 +290,17 @@ npm run dev -- --mode priya    # teammate's backend
 | 7 | Documentation and demo checklist |
 | + | Conversation panel with streamed LLM reply, TTFT metrics, UI polish |
 
+### Week 4: interruption, polish, training & deployment ✅
+
+| Work |
+|---|
+| Barge-in UI (interrupted state, Stop button, dropped-audio info) |
+| Waveform visualiser for user + AI audio, animated orb, Experience / Engineer views |
+| Crisis negotiation training mode: agitation meter, per-turn reasons, score card |
+| Arousal / valence emotion map |
+| 12 training scenarios with a picker, difficulty badges and Random |
+| Deployed on Vercel with env-based backend URL and Metered TURN |
+
 ### Week 3: emotion, voice & latency ✅
 
 | Day | Work |
@@ -265,22 +317,11 @@ npm run dev -- --mode priya    # teammate's backend
 
 ## Known limitations
 
-- **Latency is above the 800 ms target:** about 4.8 s to the first audio (p50) with Whisper on CPU; GPU Whisper and shorter replies are the next steps.
-- **Long replies:** Llama sometimes answers in a full paragraph, which delays the end of the spoken reply.
-- **Whisper `base.en`** mishears unusual terms and accents (e.g. "Gen AI" → "Genet API").
-- **Voice-only emotion is weak on our voices** (~29–55 %); the words carry most of the signal, so the fused result is what the UI shows.
-- **No barge-in yet:** speech while Auralis is talking is ignored (echo filter) rather than interrupting it.
-- **Free public TURN server** is unreliable across networks; **ngrok** adds delay when using a remote backend.
+- **Latency is above the 800 ms target:** ~2.7 s to the first audio with GPU Whisper on a 4 GB laptop GPU (RTX 2050). About 0.7 s of that is the deliberate end-of-speech wait; Llama and Piper share the same small GPU.
+- **Live demo depends on a laptop:** when the backend laptop is off, the deployed page shows "Backend offline".
+- **Voice-only emotion is weak on real speakers;** the fused voice + words result is what the UI shows.
+- **Piper instead of XTTS-v2 in the live system:** XTTS carried more emotion in tests but is too slow on a 4 GB GPU for real time.
 - Saved audit runs live in the browser's `localStorage` (export CSV to keep them).
-
----
-
-## Roadmap (Week 4: Refine & Polish)
-
-- Interruption handling (barge-in): stop Auralis's voice as soon as the user speaks
-- Waveform visualiser for user and AI audio; emotion-driven colour shifts
-- Dedicated TURN server for cross-network demos
-- Final latency runs with GPU Whisper
 
 ---
 
