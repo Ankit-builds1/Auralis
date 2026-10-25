@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎙️ AURALIS
+# 🎙️AURALIS
 
 ### Real-Time Voice-to-Voice Emotion Engine
 
