@@ -6,6 +6,10 @@ const BACKEND_URL = `${import.meta.env.VITE_BACKEND_URL}/webrtc/offer`;
 
 // Week 3 Day 6: backend status + which models / devices it runs
 const HEALTH_URL = `${import.meta.env.VITE_BACKEND_URL}/health`;
+
+// Week 4 demo mode: links shown when the GPU backend is offline
+const DEMO_VIDEO_URL = import.meta.env.VITE_DEMO_VIDEO_URL || '';
+const REPO_URL = 'https://github.com/Ankit-builds1/Auralis';
 const HEALTH_POLL_MS = 15000;
 
 // Week 3 Day 3: 'ai_speaking' = Auralis is talking (Piper TTS)
@@ -625,6 +629,8 @@ function App() {
   const [health, setHealth] = useState(null);
   const [healthError, setHealthError] = useState(null);
   const [healthMs, setHealthMs] = useState(null);
+  // Week 4 demo mode: offline banner can be closed for this visit
+  const [demoBannerClosed, setDemoBannerClosed] = useState(false);
   const [runs, setRuns] = useState(loadRuns);
   const [runLabel, setRunLabel] = useState('');
 
@@ -2323,6 +2329,40 @@ function App() {
           </div>
         </header>
 
+        {/* ================= DEMO MODE: backend offline (Week 4) ================= */}
+        {!health && healthError && !isLive && !demoBannerClosed && (
+          <section className="demo-banner" role="status">
+            <div className="demo-banner-text">
+              <p className="demo-kicker">Demo mode · live AI offline</p>
+              <h2>The Auralis GPU backend is not running right now</h2>
+              <p>
+                This page is hosted on Vercel, but the AI (Faster-Whisper, WavLM-Large emotion,
+                Llama 3.2 3B and Piper TTS) needs a GPU, so it runs on a team laptop behind a
+                Cloudflare Tunnel. When that laptop is online this page connects automatically.
+              </p>
+              <ul className="demo-points">
+                <li>Speech → text in ~130–195 ms (Faster-Whisper on GPU)</li>
+                <li>Emotion from voice + words, fused (~78% on live turns)</li>
+                <li>Interrupt Auralis mid-sentence (stops in ~200–450 ms)</li>
+                <li>Crisis negotiation training with 12 scenarios and a score card</li>
+              </ul>
+            </div>
+            <div className="demo-banner-actions">
+              {DEMO_VIDEO_URL && (
+                <a className="xp-btn xp-btn-primary" href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
+                  Watch the demo video
+                </a>
+              )}
+              <a className="xp-btn xp-btn-ghost" href={REPO_URL} target="_blank" rel="noreferrer">
+                View code on GitHub
+              </a>
+              <button className="xp-link" onClick={() => setDemoBannerClosed(true)}>
+                Explore the interface anyway
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* ================= EXPERIENCE VIEW (Week 4 Day 3) ================= */}
 
         {view === 'experience' && (
@@ -2401,7 +2441,11 @@ function App() {
               </div>
 
               {!health && !isLive && (
-                <p className="xp-note">Waiting for the Auralis backend to come online…</p>
+                <p className="xp-note">
+                  {healthError
+                    ? 'Live AI is offline (demo mode). The GPU backend runs on a team laptop; this page reconnects when it is online.'
+                    : 'Checking the Auralis backend…'}
+                </p>
               )}
               {error && <p className="xp-error">{error}</p>}
             </section>
