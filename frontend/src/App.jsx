@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import './App.css';
 import './ui-polish.css';
+import { DEMO_SESSION } from './demoSession';
 
 const BACKEND_URL = `${import.meta.env.VITE_BACKEND_URL}/webrtc/offer`;
 
@@ -403,6 +404,89 @@ const EmotionMap = ({ you, caller, callerName = 'Caller' }) => {
   );
 };
 
+// Week 4 demo mode: replay a sample training session without the backend
+const DemoReplay = ({ onClose }) => {
+  const s = DEMO_SESSION;
+  const [step, setStep] = useState(0); // number of turns shown
+  const [playing, setPlaying] = useState(true);
+  const total = s.turns.length;
+
+  useEffect(() => {
+    if (!playing || step >= total) return undefined;
+    const t = setTimeout(() => setStep((n) => n + 1), step === 0 ? 1200 : 2600);
+    return () => clearTimeout(t);
+  }, [playing, step, total]);
+
+  const shown = s.turns.slice(0, step);
+  const agitation = step ? shown[step - 1].agitation : s.start;
+  const done = step >= total;
+  const calm = shown.filter((t) => t.reasons.some((r) => r.startsWith('calm tone'))).length;
+  const empathy = shown.filter((t) => t.reasons.some((r) => r.startsWith('de-escalating'))).length;
+  const escalating = shown.filter((t) => t.reasons.some((r) => r.startsWith('escalating'))).length;
+
+  return (
+    <section className="demo-replay" aria-label="Sample training session replay">
+      <div className="demo-replay-head">
+        <div>
+          <p className="demo-kicker">Sample session · negotiation training</p>
+          <h3>{s.scenario.name}: {s.scenario.title} <span className={`level-badge level-${s.scenario.level.toLowerCase()}`}>{s.scenario.level}</span></h3>
+          <p className="xp-muted">{s.scenario.brief}</p>
+        </div>
+        <div className="demo-replay-controls">
+          {done ? (
+            <button className="xp-btn xp-btn-ghost" onClick={() => { setStep(0); setPlaying(true); }}>Replay</button>
+          ) : (
+            <button className="xp-btn xp-btn-ghost" onClick={() => setPlaying((p) => !p)}>{playing ? 'Pause' : 'Play'}</button>
+          )}
+          <button className="xp-link" onClick={onClose}>Close</button>
+        </div>
+      </div>
+
+      <div className="agitation">
+        <div className="agitation-head">
+          <span>{s.scenario.name}'s agitation</span>
+          <strong style={{ color: agitationColor(agitation) }}>{agitation}</strong>
+        </div>
+        <div className="agitation-track">
+          <div className="agitation-goal" style={{ left: `${s.goal}%` }} title="goal" />
+          <div className="agitation-fill" style={{ width: `${agitation}%`, background: agitationColor(agitation) }} />
+        </div>
+      </div>
+
+      <div className="demo-replay-chat">
+        <div className="demo-msg demo-msg-caller"><strong>{s.scenario.name}</strong>{s.opening}</div>
+        {shown.map((t, i) => (
+          <div key={i} className="demo-turn">
+            <div className="demo-msg demo-msg-user">
+              <strong>Trainee <span className="demo-emotion">{EMOTION_EMOJI[t.emotion]} {t.emotion}</span></strong>
+              {t.user}
+              <span className={t.delta > 0 ? 'delta-up' : 'delta-down'}>
+                {t.delta > 0 ? '+' : ''}{t.delta} · {t.reasons.join(' · ')}
+              </span>
+            </div>
+            <div className="demo-msg demo-msg-caller"><strong>{s.scenario.name}</strong>{t.caller}</div>
+          </div>
+        ))}
+      </div>
+
+      {done && (
+        <div className="demo-score">
+          <strong className="score-pass">De-escalated</strong>
+          <span>{s.start} → {agitation} agitation</span>
+          <span>{total} turns</span>
+          <span>{Math.round((calm / total) * 100)}% calm tone</span>
+          <span>{empathy} empathy turns</span>
+          <span>{escalating} escalating turn</span>
+        </div>
+      )}
+      <p className="xp-muted demo-note">
+        Sample replay in the browser, following the flow of our live test. With the backend online, the
+        trainee speaks and Auralis (Llama 3.2 + Piper) plays the caller live.
+      </p>
+    </section>
+  );
+};
+
 // Week 3 Day 2: emoji for each emotion label sent by the backend
 const EMOTION_EMOJI = {
   angry: '😠',
@@ -631,6 +715,7 @@ function App() {
   const [healthMs, setHealthMs] = useState(null);
   // Week 4 demo mode: offline banner can be closed for this visit
   const [demoBannerClosed, setDemoBannerClosed] = useState(false);
+  const [showReplay, setShowReplay] = useState(false);
   const [runs, setRuns] = useState(loadRuns);
   const [runLabel, setRunLabel] = useState('');
 
@@ -2348,6 +2433,9 @@ function App() {
               </ul>
             </div>
             <div className="demo-banner-actions">
+              <button className="xp-btn xp-btn-primary" onClick={() => setShowReplay(true)}>
+                Play a sample session
+              </button>
               {DEMO_VIDEO_URL && (
                 <a className="xp-btn xp-btn-primary" href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer">
                   Watch the demo video
@@ -2362,6 +2450,8 @@ function App() {
             </div>
           </section>
         )}
+
+        {showReplay && <DemoReplay onClose={() => setShowReplay(false)} />}
 
         {/* ================= EXPERIENCE VIEW (Week 4 Day 3) ================= */}
 
