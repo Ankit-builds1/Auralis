@@ -2097,3 +2097,81 @@ body::after {
   .auralis-app .auralis-container .demo-replay-head { flex-direction: column; }
   .auralis-app .auralis-container .demo-msg { max-width: 100%; }
 }
+
+
+/* Week 4: session recorder / replay bar */
+.auralis-app .auralis-container .rec-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 0 0 16px;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-dim);
+  font: 500 13px/1.4 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .rec-bar.is-replay {
+  border-color: rgba(139, 125, 255, 0.45);
+  background: rgba(139, 125, 255, 0.10);
+  color: var(--text);
+}
+
+.auralis-app .auralis-container .rec-bar strong {
+  color: #a78bfa;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+}
+
+.auralis-app .auralis-container .rec-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.auralis-app .auralis-container .rec-dot-live {
+  background: #f87171;
+  box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.18);
+  animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+.auralis-app .auralis-container .rec-dot-replay {
+  background: #a78bfa;
+  box-shadow: 0 0 0 4px rgba(167, 139, 250, 0.2);
+}
+
+.auralis-app .auralis-container .rec-spacer {
+  flex: 1;
+}
+
+.auralis-app .auralis-container .rec-bar select {
+  max-width: 260px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: 500 12px/1.2 'Inter', sans-serif;
+}
+
+.auralis-app .auralis-container .rec-bar select option {
+  background: #10141c;
+  color: #e6e9ef;
+}
+
+.auralis-app .auralis-container .rec-bar .xp-link:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.auralis-app .auralis-container .rec-file input {
+  display: none;
+}
+
+@keyframes rec-pulse {
+  50% { opacity: 0.45; }
+}

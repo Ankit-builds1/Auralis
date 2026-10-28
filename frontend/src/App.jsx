@@ -554,6 +554,15 @@ const pctOf = (hit, total) => (total > 0 ? `${Math.round((hit / total) * 100)}%`
 // Latency runs are kept in this browser (localStorage) so a run measured on
 // Priya's CPU backend (via ngrok) can be compared with one on the GPU laptop.
 const AUDIT_STORAGE_KEY = 'auralis_latency_runs_v1';
+// Week 4: record & replay of real sessions (backend messages + timing)
+const SESSION_STORAGE_KEY = 'auralis_saved_sessions_v1';
+const loadSavedSessions = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || '[]');
+  } catch {
+    return [];
+  }
+};
 const AUDIT_MAX_RUNS = 10;
 
 const loadRuns = () => {
@@ -739,6 +748,16 @@ function App() {
   // Week 3 Day 1: AI audio (backend -> browser) status
   const [aiAudio, setAiAudio] = useState('waiting');
   const [aiPackets, setAiPackets] = useState(0);
+
+  // Week 4: session recorder (every backend message of the live session,
+  // with its time) and replay of a saved session through the same handler
+  const recordingRef = useRef({ startedAt: null, mode: 'assistant', events: [] });
+  const [recordCount, setRecordCount] = useState(0);
+  const [savedSessions, setSavedSessions] = useState(loadSavedSessions);
+  const [selectedSession, setSelectedSession] = useState('');
+  const [replay, setReplay] = useState(null); // { name, date, done, total, shown }
+  const replayTimersRef = useRef([]);
+  const handlerRef = useRef(null);
 
   const streamRef = useRef(null);
   const pcRef = useRef(null);
@@ -1448,6 +1467,10 @@ function App() {
             history: [data.agitation ?? 85],
             steps: [],
           });
+          if (appModeRef.current !== 'training') {
+            appModeRef.current = 'training';
+            setAppMode('training');
+          }
           if (data.scenario?.id) {
             scenarioIdRef.current = data.scenario.id;
             setScenarioId(data.scenario.id);
@@ -1773,6 +1796,8 @@ function App() {
     }
   };
 
+  handlerRef.current = handleDataChannelMessage;
+
   // ---------------------------------------------------------
   // SETUP DATA CHANNEL
   // ---------------------------------------------------------
@@ -1783,7 +1808,10 @@ function App() {
     dataChannelRef.current = channel;
 
     channel.onopen = () => addEvent(`${source} opened: ${channel.label}`);
-    channel.onmessage = (event) => handleDataChannelMessage(event.data);
+    channel.onmessage = (event) => {
+      recordMessage(event.data);
+      handleDataChannelMessage(event.data);
+    };
     channel.onerror = (event) => {
       console.error(`${source} error:`, event);
       addEvent(`${source} error`);
@@ -2131,6 +2159,138 @@ function App() {
     // Transcripts, latency and audit history are kept for review after stopping
   };
 
+  // ---------------------------------------------------------
+  // Week 4: RECORD & REPLAY a real session
+  // ---------------------------------------------------------
+
+  const recordMessage = (raw) => {
+    const rec = recordingRef.current;
+    let data;
+    try {
+      data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      return;
+    }
+    // ~50 frames/s: keep only frames that start/end a segment or update the counter
+    if (data.type === 'audio_frame' && !data.segment_started && !data.segment_finished
+        && (data.frame ?? 0) % 50 !== 0) return;
+    if (!rec.startedAt) {
+      rec.startedAt = Date.now();
+      rec.mode = appModeRef.current;
+      rec.events = [];
+    }
+    rec.events.push({ t: Date.now() - rec.startedAt, d: data });
+    if (rec.events.length % 10 === 0 || data.type !== 'audio_frame') setRecordCount(rec.events.length);
+  };
+
+  const buildSession = (name) => ({
+    name: name || `Session ${new Date().toLocaleString()}`,
+    date: new Date(recordingRef.current.startedAt || Date.now()).toISOString(),
+    mode: recordingRef.current.mode,
+    snapshot: { frameCount, aiPackets, aiAudio },
+    events: recordingRef.current.events,
+  });
+
+  const saveSession = () => {
+    if (!recordingRef.current.events.length) return;
+    const name = window.prompt('Name this session (e.g. "Review demo - training Meera")', '');
+    if (name === null) return;
+    const session = buildSession(name.trim());
+    const next = [session, ...savedSessions.filter((x) => x.name !== session.name)].slice(0, 5);
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      addEvent('Session too big for browser storage: use Download instead');
+    }
+    setSavedSessions(next);
+    setSelectedSession(session.name);
+    addEvent(`Session saved: ${session.name} (${session.events.length} events)`);
+  };
+
+  const downloadSession = (session) => {
+    if (!session) return;
+    const blob = new Blob([JSON.stringify(session)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${session.name.replace(/[^a-z0-9-_ ]/gi, '').trim() || 'auralis-session'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const loadSessionFile = async (file) => {
+    if (!file) return;
+    try {
+      const session = JSON.parse(await file.text());
+      if (!Array.isArray(session.events)) throw new Error('not an Auralis session');
+      const next = [session, ...savedSessions.filter((x) => x.name !== session.name)].slice(0, 5);
+      try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        /* keep it in memory only */
+      }
+      setSavedSessions(next);
+      setSelectedSession(session.name);
+      addEvent(`Session loaded from file: ${session.name}`);
+    } catch (err) {
+      addEvent(`Could not load session: ${err.message}`);
+    }
+  };
+
+  const deleteSession = (name) => {
+    const next = savedSessions.filter((x) => x.name !== name);
+    try {
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+    setSavedSessions(next);
+    setSelectedSession('');
+  };
+
+  const stopReplay = () => {
+    replayTimersRef.current.forEach(clearTimeout);
+    replayTimersRef.current = [];
+    setReplay(null);
+  };
+
+  const startReplay = (session, speed = 'fast') => {
+    if (!session) return;
+    replayTimersRef.current.forEach(clearTimeout);
+    replayTimersRef.current = [];
+    // fresh screen in the mode the session was recorded in
+    appModeRef.current = session.mode || 'assistant';
+    setAppMode(session.mode || 'assistant');
+    setTraining(null);
+    setShowScore(false);
+    clearHistory();
+    modeSyncedRef.current = true; // replay must not talk to a backend
+    setStatus('replay');
+    const total = session.events.length;
+    setReplay({ name: session.name, date: session.date, done: false, total, shown: 0 });
+
+    // real time keeps the original gaps; fast squeezes long pauses
+    let clock = 0;
+    let prev = 0;
+    session.events.forEach((ev, i) => {
+      const gap = ev.t - prev;
+      prev = ev.t;
+      clock += speed === 'real' ? gap : Math.min(gap, 700) * 0.5;
+      replayTimersRef.current.push(setTimeout(() => {
+        handlerRef.current?.(ev.d);
+        if (i % 5 === 0 || i === total - 1) setReplay((rp) => rp && { ...rp, shown: i + 1 });
+      }, clock));
+    });
+    replayTimersRef.current.push(setTimeout(() => {
+      const snap = session.snapshot || {};
+      if (snap.frameCount) setFrameCount(snap.frameCount);
+      if (snap.aiPackets) setAiPackets(snap.aiPackets);
+      if (snap.aiAudio) setAiAudio(snap.aiAudio);
+      setReplay((rp) => rp && { ...rp, done: true, shown: total });
+      addEvent(`Replay finished: ${session.name}`);
+    }, clock + 300));
+  };
+
   const clearHistory = () => {
     setTurns([]);
     setLatencies([]);
@@ -2414,8 +2574,62 @@ function App() {
           </div>
         </header>
 
+        {/* ================= SESSION RECORDER / REPLAY (Week 4) ================= */}
+        <section className={`rec-bar ${replay ? 'is-replay' : ''}`}>
+          {replay ? (
+            <>
+              <span className="rec-dot rec-dot-replay" />
+              <strong>REPLAY</strong>
+              <span className="rec-text">
+                Recorded session “{replay.name}” · {new Date(replay.date).toLocaleString()} ·{' '}
+                {replay.done ? 'finished' : `${replay.shown}/${replay.total} events`}
+              </span>
+              <button className="xp-link" onClick={() => startReplay(savedSessions.find((x) => x.name === replay.name), 'fast')}>Replay again</button>
+              <button className="xp-link" onClick={() => { stopReplay(); clearHistory(); setTraining(null); setStatus('idle'); }}>Exit replay</button>
+            </>
+          ) : (
+            <>
+              <span className={`rec-dot ${isLive ? 'rec-dot-live' : ''}`} />
+              <span className="rec-text">
+                {isLive
+                  ? `Recording this session · ${recordCount} events`
+                  : recordCount
+                    ? `Last session recorded · ${recordCount} events`
+                    : 'Session recorder: live sessions are recorded so they can be saved and replayed'}
+              </span>
+              {recordCount > 0 && (
+                <>
+                  <button className="xp-link" onClick={saveSession}>Save</button>
+                  <button className="xp-link" onClick={() => downloadSession(buildSession(''))}>Download</button>
+                </>
+              )}
+              <span className="rec-spacer" />
+              <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} aria-label="Saved sessions">
+                <option value="">Saved sessions ({savedSessions.length})</option>
+                {savedSessions.map((x) => (
+                  <option key={x.name} value={x.name}>{x.name}</option>
+                ))}
+              </select>
+              <button className="xp-link" disabled={!selectedSession || isLive}
+                onClick={() => startReplay(savedSessions.find((x) => x.name === selectedSession), 'fast')}>Replay</button>
+              <button className="xp-link" disabled={!selectedSession || isLive}
+                onClick={() => startReplay(savedSessions.find((x) => x.name === selectedSession), 'real')}>Real time</button>
+              {selectedSession && (
+                <>
+                  <button className="xp-link" onClick={() => downloadSession(savedSessions.find((x) => x.name === selectedSession))}>Download</button>
+                  <button className="xp-link" onClick={() => deleteSession(selectedSession)}>Delete</button>
+                </>
+              )}
+              <label className="xp-link rec-file">
+                Load file
+                <input type="file" accept="application/json,.json" onChange={(e) => { loadSessionFile(e.target.files?.[0]); e.target.value = ''; }} />
+              </label>
+            </>
+          )}
+        </section>
+
         {/* ================= DEMO MODE: backend offline (Week 4) ================= */}
-        {!health && healthError && !isLive && !demoBannerClosed && (
+        {!health && healthError && !isLive && !demoBannerClosed && !replay && (
           <section className="demo-banner" role="status">
             <div className="demo-banner-text">
               <p className="demo-kicker">Demo mode · live AI offline</p>
