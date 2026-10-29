@@ -75,7 +75,10 @@ Signalling is one HTTP exchange (offer → answer). After that, audio both ways 
 | **Barge-in (Week 4)** | If that speech is really the user, Auralis stops: LLM + TTS cancelled, queued audio dropped, `interrupted` event sent, the new question answered. The frontend STOP button sends `{"type": "interrupt"}` |
 | **Relative loudness gate (Week 4)** | Auralis learns the user's normal speaking level from their own speech; while it talks, only voiced frames at most **5 dB** below that level count, and **10** of them (200 ms) trigger barge-in. Before the level is known: 20 voiced frames (400 ms). Based on the ML branch finding that Silero VAD also calls speaker echo "speech" |
 | Latency metrics | Per-turn breakdown (`stt_ms`, `ttft_ms`, `first_piece_ms`, `ttfa_ms`, …) sent live and appended to `logs/latency.csv` |
-| CORS | Allowed origins: `localhost:5173` / `5174` |
+| **Training mode (Week 4)** | Crisis negotiation trainer: Auralis plays a distressed person from one of **12 scenarios**; the trainee's tone, words and interruptions move an **agitation** score (0–100) and Llama plays the character at that level (`app/training/negotiation.py`) |
+| **Emotion fix (Week 4)** | Personal voice baseline learned from turns whose words are neutral, damping of voice-only "disgust", neutral-words weighting → live turns 4/9 → 7/9 correct |
+| CORS | `localhost:5173` / `5174` always, plus the origins in `CORS_ORIGINS` (e.g. the Vercel URL) |
+| TURN | STUN always; a TURN relay from `TURN_URL` / `TURN_USERNAME` / `TURN_CREDENTIAL` for users on other networks |
 
 ---
 
@@ -104,6 +107,9 @@ Signalling is one HTTP exchange (offer → answer). After that, audio both ways 
 | `type` | Effect |
 |---|---|
 | `interrupt` | STOP AURALIS button: same as a barge-in (`reason: "manual"`) |
+| `set_mode` | `{"mode": "assistant" \| "training", "scenario": "<id>"}`: switch to the negotiation trainer (new conversation) |
+
+**Training mode events (backend → browser):** `mode` (`mode, scenario, scenarios, agitation, goal`) when the mode changes, and `training_state` (`agitation, delta, reasons, turn, start, goal, scenario_id`) after every trainee turn.
 
 **One turn:** `vad: speaking` → `processing` → `transcript` → `emotion` → `llm_start` → `llm_token` × N → `tts_start` → `vad: ai_speaking` → `tts_sentence` × N → `llm_done` → `tts_end` → `turn_metrics` → `vad: idle`
 
@@ -163,6 +169,38 @@ The 800 ms target is not reached yet: ~0.7 s is the deliberate end-of-speech win
 | Self-interruptions from echo | **0** in the live test (browser echo cancellation on) |
 | ML evaluation (`ml/src/bargein/eval_barge_in.py`, ML branch) | Silero VAD also calls speaker echo "speech", so frame counting alone cannot separate echo from the user; a **loudness gate** + 10 frames gave 98 % detection and 0 % false triggers in simulation → next step: a gate relative to the user's own speech level |
 | Emotion fix | Plain questions ("Tell me about AI") no longer show up as "sad": clearly neutral words need a very sure voice to override them |
+| Emotion fix 2 (personal baseline + disgust damping) | Live turns correct: **4/9 → 7/9** (~78 %) |
+| Whisper benchmark on our voices (ML branch) | `base.en` 59.9 % word accuracy / 129 ms; **`distil-small.en` 66.3 % / 195 ms** (now live); `small.en` 68.4 % / 270 ms |
+| Training mode (live, "Locked-in office worker") | Agitation **85 → 9** in 5 turns, score **86/100**, De-escalated |
+
+### Week 4: crisis negotiation training mode
+
+| Part | How it works |
+|---|---|
+| Roles | Auralis = the distressed caller, the user = trainee negotiator |
+| Agitation (0–100) | Starts at the scenario's level (70–90). Per turn: calm tone −8, soft tone −4, upset tone +12; de-escalating words (empathy, listening, safety, options) up to −18; escalating words ("calm down", threats, rushing) up to +24; talking over the caller +8; very long turn +4. One turn can lower it by at most 20 |
+| Goal | Agitation ≤ 30 = "De-escalated" |
+| LLM | Llama gets the scenario persona + the current agitation level (very agitated → calm and cooperative) and stays in character |
+| Voice | Tense (normal) voice while agitation ≥ 50, calmer voice below |
+| Safety | No weapons or self-harm in any scenario; crisis phrases from the trainee still trigger the normal safety reply |
+
+**12 scenarios:** locked-in office worker (Hard), cancelled flight (Medium), failed exam (Easy), noisy neighbour (Easy), hospital wait (Medium), rejected loan (Medium), fake delivery complaint (Easy), unpaid factory salary (Hard), child late from school (Hard), road accident argument (Medium), online fraud victim (Medium), sudden eviction (Medium).
+
+### Week 4: deployment (hybrid)
+
+```
+Browser ──► Vercel (frontend)
+   ├─ signalling (HTTPS) ──► Cloudflare Tunnel ──► this backend :8001 (GPU laptop)
+   └─ audio (WebRTC) ──────► Metered TURN relay ──► this backend
+```
+
+The backend needs a GPU (Whisper, WavLM-Large, Llama 3.2 3B and Piper together), so it runs on a team laptop:
+
+1. In `.env`: `CORS_ORIGINS=https://<app>.vercel.app` and `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` (never commit them).
+2. `python -m app.main` → check the startup line `[STARTUP] CORS origins: …`.
+3. `cloudflared tunnel --url http://localhost:8001` → put the `https://….trycloudflare.com` URL into the frontend's `VITE_BACKEND_URL` on Vercel and redeploy.
+
+Live demo: https://auralis-hazel.vercel.app (works while the backend laptop is online).
 
 ---
 
@@ -250,7 +288,7 @@ Covers VAD, PCM conversion, latency tracking, speech segmentation, the audio pro
 | Emotion always neutral | `EMOTION_MODEL` / joblib missing, or confidence gate | Check `.env` and `models/`; see `EMOTION_MIN_CONFIDENCE` |
 | Auralis stops by itself while speaking | Speaker echo counted as the user | Use headphones, or raise `BARGE_IN_MIN_VOICED_FRAMES` to 30 |
 | Auralis does not stop when interrupted | Speech too short / too quiet, or `BARGE_IN=0` | Talk a bit longer; check `.env` |
-| 403 / CORS error | Frontend not on `localhost:5173`/`5174` | Use an allowed port |
+| 403 / CORS error | Frontend origin not allowed | Use `localhost:5173`/`5174`, or add the site to `CORS_ORIGINS` in `.env` |
 | `ERR_CONNECTION_REFUSED` via ngrok | ngrok stopped or pointing to another app | Restart `ngrok http 8001` |
 
 ---
@@ -283,6 +321,9 @@ Silero VAD with tuned end-of-speech, segmentation, Faster-Whisper `base.en` with
 - **Relative loudness gate** for barge-in (from the ML W4D1 evaluation): echo no longer stops Auralis, real interruptions are detected in ~200 ms
 - **Latency sprint**: shorter first sentence in the prompt (Auralis starts speaking sooner), `VAD_SILENCE_MS` setting, `tools/latency_report.py`
 - Fixed `requirements.txt` (transformers, scikit-learn, joblib, piper-tts, librosa, scipy, soundfile), full `.env.example`, safer `.gitignore`
+- **Emotion fix 2**: personal voice baseline, disgust damping, request-first prompt
+- **Crisis negotiation training mode** (`set_mode`, `mode`, `training_state`) with **12 scenarios**
+- **Deployment**: `CORS_ORIGINS` and TURN settings from `.env`, Cloudflare Tunnel + Vercel
 
 ---
 
@@ -290,10 +331,10 @@ Silero VAD with tuned end-of-speech, segmentation, Faster-Whisper `base.en` with
 
 - **Latency above the 800 ms target:** ~2.7 s to the first audio with GPU Whisper on a 4 GB laptop GPU, ~7–8 s on CPU only
 - **Voice-only emotion is weak on real speakers** (~50 %); the words carry most of the signal, so fusion is essential
-- **Whisper `base.en`** mishears some terms with our accent (e.g. "AI" → "A.A.")
+- **Whisper** still mishears some terms with our accent; `distil-small.en` reaches ~66 % word accuracy on our recordings
 - **Barge-in**: the loudness gate needs ~1 s of the user's speech to learn their level; a user who interrupts much more quietly than they normally speak may not stop Auralis
 - Piper changes speed / pitch / volume only; XTTS-v2 carried more emotion in tests but needs a GPU and is not deployed
-- Free ngrok URLs change on every restart
+- **Live demo depends on the laptop:** a quick Cloudflare tunnel gets a new URL on every restart, and the page works only while the backend laptop is online
 
 ---
 
@@ -333,7 +374,8 @@ Backend/
 │   ├── stt/
 │   │   ├── transcriber.py          # Faster-Whisper, GPU/CPU auto-select, hallucination filter
 │   │   └── engine.py               # one shared Whisper model
-│   ├── llm/ollama_client.py        # async streaming Llama client, persona, safety rule
+│   ├── llm/ollama_client.py        # async streaming Llama client, persona, safety rule, training prompt
+│   ├── training/negotiation.py     # 12 scenarios, agitation rules, caller persona prompt
 │   ├── tts/engine.py               # Piper voice, voice styles, sentence splitter
 │   └── ml_clients/
 │       ├── emotion_engine.py       # WavLM-Large voice emotion
