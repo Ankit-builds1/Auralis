@@ -8,9 +8,37 @@ Part of Infotact Solutions' Advanced Generative AI Engineering internship (Proje
 
 | Role | Owner | Branch |
 |---|---|---|
-| **ML: emotion recognition, fusion, TTS research (this module)** | Siddhant (Weeks 1–2), then Ankit Dash + Priya Nirmal (Week 3) | `ML` |
+| **ML: emotion recognition, fusion, TTS research (this module)** | Siddhant (Weeks 1–2), then Ankit Dash + Priya Nirmal (Weeks 3–4) | `ML` |
 | Backend: WebRTC, VAD, STT, LLM + TTS streaming | Priya Nirmal | `Backend` |
 | Frontend: WebRTC client + live dashboard | Ankit Dash | `frontend` |
+
+Siddhant left the internship after the mid-project review. From Week 3, Ankit and Priya took over the ML work on alternate days next to their own modules.
+
+**Live demo:** https://auralis-hazel.vercel.app (the GPU backend runs on a team laptop, so the live AI answers only while it is online).
+
+---
+
+## Final results summary
+
+| Area | Result | Where |
+|---|---|---|
+| Voice emotion (WavLM-Large, 6 classes) | **74.6 %** on unseen CREMA-D actors | Week 3 Day 2 |
+| Speaker adaptation to our voices | 19 % → **53 %** | Week 3 Day 3 |
+| Fused voice + words, live turns | 29 % (voice) → 71 % (fused) → **~78 %** after the Week 4 fix (7/9) | Week 3 Day 5, Week 4 Day 2 |
+| TTS choice | Piper 31–175 ms per sentence vs Kokoro 422–1,887 ms → **Piper** | Week 3 Day 1 |
+| Barge-in gate (simulation) | **98 %** detection, **0 %** false triggers | Week 4 Day 1 |
+| Whisper on our voices | `distil-small.en` **66.3 %** word accuracy at 195 ms → used live | Week 4 Day 3 |
+| Training mode (live use of the emotion output) | Agitation 85 → 9 in 5 turns, score 86/100 | Backend branch |
+
+## Design trade-offs
+
+| Decision | Why |
+|---|---|
+| **Piper instead of XTTS-v2 live** | XTTS-v2 transferred emotion (Day 6) but needs seconds per sentence on our 4 GB GPU and has a non-commercial licence; Piper speaks in real time and we change speed / pitch / volume per emotion |
+| **Fusion instead of voice-only** | Voice-only emotion drops to ~50 % on real (non-acted) speakers; the words are far stronger, the voice adds tone when the words are neutral |
+| **Frozen WavLM + small classifier** | Fine-tuning a 300M-parameter model was not possible on our hardware; frozen embeddings + logistic regression train in minutes and adapt to new speakers |
+| **`distil-small.en` for STT** | Best accuracy that still fits the ~200 ms target (`small.en` is more accurate but 270 ms) |
+| **800 ms target not reached (~2.7 s first audio)** | ~0.7 s is the end-of-speech wait; Llama 3.2 3B and Piper share one 4 GB laptop GPU. Every stage is measured (`turn_metrics`), so the bottleneck is known |
 
 ---
 
@@ -367,7 +395,7 @@ ml/
 
 **Week 3 ✅** Piper chosen (Day 1) · WavLM-Large 74.6 % (Day 2) · speaker adaptation 19 % → 53 % on our voices (Day 3) · multi-corpus + leave-one-corpus-out (Day 4) · text emotion + fusion, live 29 % → 71 % (Day 5) · XTTS-v2 emotional TTS study (Day 6) · this report (Day 7)
 
-**Week 4 ✅** Barge-in threshold evaluation: echo vs user, loudness gate (Day 1) · personal voice baseline + balanced fusion, live 4/9 → 7/9 (Day 2) · Whisper benchmark: small.en 68.4 % vs base.en 59.9 %, base.en 129 ms (Day 3) · this report
+**Week 4 ✅** Barge-in threshold evaluation: echo vs user, loudness gate (Day 1) · personal voice baseline + balanced fusion, live 4/9 → 7/9 (Day 2) · Whisper benchmark: small.en 68.4 % vs base.en 59.9 %, distil-small.en 66.3 % at 195 ms chosen for live (Day 3) · emotion output drives the negotiation training mode (12 scenarios, agitation score) · final summary and design trade-offs
 
 **Future work** Record training clips through the live browser path and re-adapt · try `emotion2vec+` · more speakers · XTTS as the live voice (GPU) · Hindi / Odia
 
