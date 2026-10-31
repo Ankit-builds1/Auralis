@@ -1,4 +1,4 @@
-# Auralis — Frontend
+# Auralis -- Frontend
 
 **Real-time Voice-to-Voice (V2V) Emotion Engine: browser client.**
 
