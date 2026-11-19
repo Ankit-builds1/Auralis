@@ -1,0 +1,2 @@
+model,layer,C,val_accuracy,test_accuracy,test_macro_f1,test_3group_accuracy
+microsoft/wavlm-base-plus,5,0.01,0.7496,0.6934,0.694,0.7787

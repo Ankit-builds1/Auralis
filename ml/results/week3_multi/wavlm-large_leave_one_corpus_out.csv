@@ -1,0 +1,4 @@
+unseen_corpus,clips,trained_on,accuracy,3group
+crema,6294,ravdess + tess + ours,0.381,0.498
+ravdess,1248,crema + tess + ours,0.644,0.758
+tess,2400,crema + ravdess + ours,0.659,0.665

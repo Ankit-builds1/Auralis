@@ -1,0 +1,28 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Generated feature datasets
+data/features/
+
+# Trained model artifacts
+models/*.joblib
+models/tts/
+
+data/raw/ravdess/
+data/raw/tess/
+
+results/week3_tts/xtts/
+
+data/bargein_echo_cache/
