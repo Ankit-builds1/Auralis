@@ -1,0 +1,7 @@
+engine,sentence,words,load_ms,warmup_ms,synth_ms,audio_ms,rtf,sample_rate,wav
+piper,1,3,3156,61,31,766,0.041,22050,results/week3_tts/piper_1.wav
+piper,2,10,3156,61,93,2508,0.037,22050,results/week3_tts/piper_2.wav
+piper,3,22,3156,61,175,5364,0.033,22050,results/week3_tts/piper_3.wav
+kokoro,1,3,1211,584,422,917,0.46,24000,results/week3_tts/kokoro_1.wav
+kokoro,2,10,1211,584,849,2304,0.369,24000,results/week3_tts/kokoro_2.wav
+kokoro,3,22,1211,584,1887,5483,0.344,24000,results/week3_tts/kokoro_3.wav

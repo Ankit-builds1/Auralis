@@ -1,0 +1,7 @@
+transcript,voice_label,text_label,final_label,final_conf,source,expected,correct
+I'm very sad today.,neutral 93%,sad 99%,sad,0.70,words,sad,True
+"Today my girlfriend cheated on me, so I'm very sad today.",disgust 59%,sad 98%,sad,0.71,words,sad,True
+I am very angry today.,angry 55%,angry 99%,angry,0.86,words,angry,True
+"Hi, my name is Ankit and today is my best day. I'm very happy.",happy 83%,happy 99%,happy,0.94,words,happy,True
+I think someone is knocking my door.,disgust 66%,fear 49%,disgust,0.54,voice,fear,False
+The meeting is at five o'clock.,angry 80%,neutral 88%,angry,0.64,voice,angry,True

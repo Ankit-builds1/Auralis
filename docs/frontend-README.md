@@ -1,0 +1,345 @@
+﻿# Auralis -- Frontend
+
+**Real-time Voice-to-Voice (V2V) Emotion Engine: browser client.**
+
+A React + native WebRTC dashboard that streams live microphone audio to the Auralis backend and shows, in real time, what the system heard, which emotion it detected (from the voice and from the words), how Auralis replies and **speaks back in a matching tone**, and how long every step took.
+
+Part of Infotact Solutions' *Advanced Generative AI Engineering* internship (Project 2).
+
+**Live demo:** https://auralis-hazel.vercel.app (hybrid deployment: the page is on Vercel, the GPU backend runs on a team laptop, so the live AI answers only while that laptop is online).
+
+| Role | Owner | Branch |
+|---|---|---|
+| **Frontend: WebRTC client + live dashboard (this module)** | Ankit Dash | `frontend` |
+| Backend: WebRTC, VAD, STT, emotion fusion, LLM + TTS streaming | Priya Nirmal | `Backend` |
+| ML: emotion recognition, fusion, TTS research | Siddhant (Weeks 1ΓÇô2), Ankit Dash + Priya Nirmal (Week 3) | `ML` |
+
+---
+
+## Why Auralis
+
+Most conversational AI chains **Speech-to-Text ΓåÆ LLM ΓåÆ Text-to-Speech** over slow request/response calls, adding 3ΓÇô5 s of delay and discarding the speaker's tone. Auralis streams audio continuously over WebRTC, detects when the user stops speaking, transcribes it, **detects the emotion**, and streams a reply from a local LLM that is **spoken back sentence by sentence** in a voice style matched to that emotion. The target is **sub-800 ms** voice responses.
+
+**Use case:** a Crisis Negotiation Training Simulator, where a trainee speaks under pressure and the AI de-escalates in a tone matched to their emotional state.
+
+---
+
+## Architecture (end of Week 3)
+
+```mermaid
+flowchart LR
+    A[Microphone] -->|getUserMedia<br/>AGC + noise suppression + echo cancellation| B[React client]
+    B -->|SDP offer<br/>POST /webrtc/offer| C[aiortc backend]
+    C -->|SDP answer| B
+    B ==>|Opus audio track<br/>WebRTC ┬╖ STUN/TURN| C
+    C --> D[Silero VAD + segmenter]
+    D --> E[Faster-Whisper base.en<br/>GPU or CPU]
+    D --> W[WavLM-Large<br/>voice emotion]
+    E --> T[DistilRoBERTa<br/>text emotion]
+    W --> FU[Fusion<br/>voice + words]
+    T --> FU
+    FU --> F[Llama 3.2 3B ┬╖ Ollama<br/>emotion-aware prompt]
+    F --> P[Piper TTS<br/>calm / soft / normal voice]
+    P ==>|Outgoing audio track| B
+    C -.->|DataChannel 'vad-state'<br/>VAD ┬╖ transcript ┬╖ emotion ┬╖ tokens ┬╖ TTS ┬╖ metrics| B
+    B -.->|GET /health every 15 s| C
+```
+
+- **Signalling:** one HTTP exchange (offer ΓåÆ answer). After that, everything flows over the peer connection.
+- **Audio both ways:** the mic goes up as a WebRTC media track; Auralis's voice comes back as a second track (UDP, low latency).
+- **Results:** VAD state, transcripts, emotions, streamed LLM tokens, TTS progress and per-turn timings come back over a WebRTC **DataChannel**, so the UI never polls for them.
+- **Status:** `/health` is the only polled endpoint; it tells the UI which models and devices the backend runs.
+
+---
+
+## Features
+
+### Week 4 (new)
+
+| Feature | What it does |
+|---|---|
+| **Barge-in (interruption)** | Talk over Auralis and it stops within ~200-450 ms; a Stop button does the same; the UI shows `interrupted` with how much audio was dropped |
+| **Waveform visualiser** | Live waveforms for the user's microphone and for Auralis's voice (Web Audio `AnalyserNode`), plus an animated orb that reacts to both |
+| **Experience view** | A clean demo view (orb, phase text, chat) next to the Engineer view with all metrics; the choice is remembered per browser |
+| **Negotiation training mode** | The PROJECT.pdf use case: Auralis plays a distressed person, the user is the trainee negotiator. Agitation meter (0-100), per-turn reasons, score card at the end |
+| **12 training scenarios** | Scenario picker (Easy / Medium / Hard) and a Random button: locked-in office worker, cancelled flight, failed exam, noisy neighbour, hospital wait, rejected loan, fake complaint, unpaid salary, late child, road accident, online fraud, eviction |
+| **Emotion map** | Arousal x valence chart: blue trail = the user's tone per turn, red trail = the caller calming down from panic |
+| **Deployment** | Built on Vercel; backend URL and TURN server come from Vite env variables |
+
+### Week 3
+
+| Feature | What it does |
+|---|---|
+| **AI voice playback** | Plays Auralis's spoken reply from the backend audio track; live packet counter from WebRTC stats; recovery button if the browser blocks autoplay |
+| **AI speaking state** | VAD panel shows `AI SPEAKING` while Auralis talks; **TTFA** card (speech end ΓåÆ first AI audio), voice-style badge (calm / soft / normal) on each reply |
+| **Echo filter display** | Counts speech the backend ignored while Auralis was talking, so the AI never answers itself |
+| **Emotion badges** | Every user turn shows the detected emotion, its confidence and group (upset / low / okay); guesses below 60 % are shown as *neutral* with the raw guess in brackets |
+| **Voice vs words** | Each badge shows the **voice** guess (WavLM), the **words** guess (text model) and **which one decided** the final emotion |
+| **Emotion Test Mode** | Pick the emotion you are acting, speak, and the panel scores final / voice-only / words-only accuracy with a confusion grid; CSV export |
+| **Latency breakdown** | Per-turn stacked bar: speech ΓåÆ text ┬╖ Llama thinking ┬╖ first phrase written ┬╖ voice synthesis; p50 / p95 first audio; slowest stage |
+| **Live backend status** | `BACKEND ONLINE ┬╖ n ms` / offline badge from `/health` every 15 s; only a real Auralis reply counts as online |
+| **System chips** | STT model + device (cpu / cuda), GPU name, voice-emotion model, words on/off, TTS engine, LLM model, straight from `/health` |
+| **Latency audit ┬╖ compare machines** | Save the current turns as a named run (e.g. *Ankit GPU*, *Priya CPU*), compare runs side by side against the 800 ms target, export CSV; runs are kept in this browser |
+
+### Weeks 1ΓÇô2
+
+| Feature | What it does |
+|---|---|
+| **WebRTC connection** | Offer/answer signalling, STUN + TURN (from `.env`), ICE gathering with early exit on a relay candidate and a 3 s cap |
+| **Mic capture + level meter** | Browser AGC, noise suppression, echo cancellation; Web Audio `AnalyserNode` ΓåÆ dB at 60 fps, written straight to the DOM |
+| **Voice activity display** | Live SPEAKING ΓåÆ PROCESSING ΓåÆ IDLE from the backend's Silero VAD |
+| **Conversation panel** | Chat bubbles; the reply **types in live, token by token**; STT time, TTFT and total time badges |
+| **Latency dashboard** | Speech ΓåÆ Text, TTFT, full reply time, colour-coded against the 800 ms target |
+| **Transcription audit** | Per-segment speech duration, silence wait, transcribed vs empty |
+| **Connection diagnostics + event log** | ICE candidate types, why gathering ended, connect time; last 30 meaningful events |
+| **Error handling** | Denied/missing mic, missing config, 404, 403 (CORS), unreachable backend, blocked autoplay, LLM / TTS errors |
+| **Performance** | Frame counter throttled (50 msgs/s ΓåÆ 5 renders/s); FIFO segment Γåö transcript queue |
+
+---
+
+## DataChannel protocol
+
+The frontend opens a DataChannel labelled `vad-state`. The backend sends JSON messages:
+
+| `type` | Main fields | Frontend behaviour |
+|---|---|---|
+| `status` | `status` | Updates the status card |
+| `audio_frame` | `frame, is_speech, segment_started, segment_finished, ΓÇª` (~50/s) | Frame counter + segment tracking; never logged |
+| `vad` | `vad_state`: `speaking` \| `processing` \| `idle` \| `ai_speaking` | Updates the VAD badge |
+| `transcript` | `text, stt_ms` | Adds a new conversation turn, records STT latency |
+| `emotion` | `label, confidence, group, confident, ms, source, voice_label, voice_confidence, text_label, text_confidence, text_ms` | Emotion badge on the turn, emotion card, test-mode scoring |
+| `llm_start` | ΓÇö | "Thinking" dots in the AI bubble |
+| `llm_token` | `text, first, ttft_ms` *(first only)* | Appends to the AI bubble; records **TTFT** |
+| `llm_done` | `text, ttft_ms, total_ms, tokens` | Finalises the bubble |
+| `tts_start` | `ttfa_ms, style` | Voice badge + **TTFA** |
+| `tts_sentence` | `index, audio_ms` | Counts spoken sentences |
+| `tts_end` | `sentences, audio_ms, underruns` | Marks the reply as spoken |
+| `turn_metrics` | `stt_ms, emotion_ms, ttft_ms, first_piece_ms, ttfa_ms, first_synth_ms, total_ms, voice` | One row in the latency breakdown |
+| `echo_ignored` | ΓÇö | Increments the echo counter |
+| `interrupted` | `reason, stop_ms, spoken_ms, dropped_ms` | Marks the reply as cut off (barge-in or Stop button) |
+| `mode` | `mode, scenario, scenarios, agitation, goal` | Switches between assistant and training mode |
+| `training_state` | `agitation, delta, reasons, turn, start, goal, scenario_id` | Moves the agitation meter, adds a step to the training log |
+| `llm_error` / `tts_error` / `audio_error` | `error` | Shows / logs the error |
+
+**One turn:** `vad: speaking` ΓåÆ `vad: processing` ΓåÆ `transcript` ΓåÆ `emotion` ΓåÆ `llm_start` ΓåÆ `llm_token` ├ù N ΓåÆ `tts_start` ΓåÆ `tts_sentence` ├ù N ΓåÆ `llm_done` ΓåÆ `tts_end` ΓåÆ `turn_metrics` ΓåÆ `vad: idle`
+
+The frontend sends: `{"type": "interrupt"}` (Stop button) and `{"type": "set_mode", "mode": "assistant" | "training", "scenario": "<id>"}`.
+
+All timings are measured by the backend **from the moment the VAD detects end of speech**, so network delay doesn't distort them.
+
+---
+
+## Week 3 results
+
+### Emotion: voice vs words (Emotion Test Mode, 7 acted turns)
+
+| Source | Accuracy |
+|---|---|
+| Voice only (WavLM-Large, adapted) | 29 % |
+| Words only (DistilRoBERTa) | 71 % |
+| **Final, fused (shown to the user)** | **71 %** (3-group 86 %) |
+
+Example: *"I'm very sad today"*, voice said neutral 93 %, words said sad 99 %, so the final emotion is **sad** (decided by the words).
+In free conversation, *"I say stop."* came out as **angry** (words 68 %), and Auralis answered in the **calm voice**: *"It sounds like you're feeling really overwhelmed right now. Can you take a deep breathΓÇª"*
+
+### Latency (Latency Audit, 10 turns, Ankit's laptop, backend on localhost)
+
+| Stage | Average |
+|---|---|
+| Speech ΓåÆ text (Whisper `base.en`, CPU) | 2,557 ms |
+| Llama thinking (Llama 3.2 3B, RTX 2050) | 1,705 ms |
+| First phrase written | 644 ms |
+| Voice synthesis (Piper) | 1,117 ms |
+| **First audio, p50 / p95** | **4,781 ms / 13,326 ms** (6├ù the 800 ms target) |
+
+- **Slowest stage: speech ΓåÆ text.** Whisper was still on the CPU in this run; the Week 3 Day 6 backend can move it to the GPU (`nvidia-cublas-cu12` + `nvidia-cudnn-cu12`), which is the next big saving.
+- Long sentences cost the most: one 25-word question took 7.4 s just to transcribe.
+- The same pipeline on a CPU-only laptop reached the first audio in roughly 7ΓÇô8 s; the Latency Audit card is built to record these runs side by side.
+
+---
+
+## Getting started
+
+**Prerequisites:** Node.js 18+, and the Auralis backend running (see the `Backend` branch).
+
+```bash
+git clone https://github.com/Ankit-builds1/Auralis.git
+cd Auralis
+git checkout frontend
+cd frontend
+npm install
+```
+
+### Pick the backend with Vite modes
+
+Env files live in `frontend/` (next to `package.json`, **not** in `src/`). They are gitignored, so never commit them.
+
+| File | Used by | Example |
+|---|---|---|
+| `.env` | `npm run dev` | `VITE_BACKEND_URL=http://localhost:8001` (backend on this machine) |
+| `.env.priya.local` | `npm run dev -- --mode priya` | `VITE_BACKEND_URL=https://<teammate>.ngrok-free.dev` (a teammate's backend via ngrok) |
+
+Optional TURN settings (only needed across different networks):
+
+```env
+VITE_TURN_URL=turn:<turn-server>:80
+VITE_TURN_USERNAME=<username>
+VITE_TURN_CREDENTIAL=<password>
+```
+
+On Windows PowerShell, create the files with plain encoding, and without a trailing `/` in the URL:
+
+```powershell
+Set-Content -Path .env -Value "VITE_BACKEND_URL=http://localhost:8001" -Encoding ascii
+Set-Content -Path .env.priya.local -Value "VITE_BACKEND_URL=https://<teammate>.ngrok-free.dev" -Encoding ascii
+```
+
+Run:
+
+```bash
+npm run dev                    # own backend   -> http://localhost:5173
+npm run dev -- --mode priya    # teammate's backend
+```
+
+**Usage:** START MIC ΓåÆ CONNECT ΓåÆ wait for ICE State `connected` ΓåÆ speak, then pause. The system chips show which backend (CPU / GPU) you are talking to.
+
+### Deployment (Week 4): Vercel + Cloudflare Tunnel + TURN
+
+```
+Browser ΓöÇΓöÇΓû║ Vercel (this frontend, static)
+   Γö£ΓöÇ signalling (HTTPS) ΓöÇΓöÇΓû║ Cloudflare Tunnel ΓöÇΓöÇΓû║ laptop backend :8001 (GPU)
+   ΓööΓöÇ audio (WebRTC) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓû║ Metered TURN relay ΓöÇΓöÇΓû║ laptop backend
+```
+
+1. Backend laptop: start Ollama and the backend; in the backend `.env` set `CORS_ORIGINS=https://<app>.vercel.app` and the `TURN_*` values.
+2. `cloudflared tunnel --url http://localhost:8001` ΓåÆ copy the `https://ΓÇª.trycloudflare.com` URL.
+3. Vercel project: Root Directory `frontend`, Framework `Vite`, Production Branch `frontend`, and these Environment Variables:
+
+| Variable | Value |
+|---|---|
+| `VITE_BACKEND_URL` | the tunnel URL (no trailing `/`) |
+| `VITE_TURN_URL` | `turn:global.relay.metered.ca:443?transport=tcp` |
+| `VITE_TURN_USERNAME` / `VITE_TURN_CREDENTIAL` | from the Metered dashboard |
+
+4. Redeploy after changing a variable (Vite bakes them in at build time). A quick tunnel gets a new URL on every restart.
+
+Why hybrid: the backend needs a GPU (Whisper, WavLM-Large, Llama 3.2 3B and Piper together), which free cloud hosting does not offer.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| "Backend URL is not configured" | `.env` missing or not loaded | Create `frontend/.env`, then restart `npm run dev` (Vite reads env files only at startup) |
+| Request goes to `.../undefined/webrtc/offer` | `.env` in the wrong folder | Put it in `frontend/`, not `src/` |
+| `.env` exists but URL is still `undefined` | PowerShell `>` writes UTF-16 | Recreate with `Set-Content ... -Encoding ascii` |
+| Requests go to `...dev//health` | Trailing `/` in `VITE_BACKEND_URL` | Remove the final `/` |
+| `BACKEND OFFLINE` although ngrok is up | ngrok points to another app, or the backend is stopped | ngrok must forward to the Auralis backend port (`8001`); start the backend |
+| `403` / CORS error | Dev server on a port other than 5173/5174 | Close old `npm run dev` terminals and restart |
+| AI bubble shows "ΓÜá Cannot reach Ollama" | Ollama not running on the backend machine | Start Ollama (`ollama serve`); if the models were moved, set `OLLAMA_MODELS` to the new folder first |
+| `ollama list` ΓåÆ "timed out waiting for server to start" | Ollama stuck looking for a moved models folder | Stop `ollama*` processes, set `OLLAMA_MODELS`, run `ollama serve` |
+| STT chip says `cpu` on a GPU machine | CUDA libraries for faster-whisper missing | In the backend venv: `pip install nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*"`, restart the backend |
+| No AI voice, packets counting | Browser blocked autoplay | Click the audio recovery button |
+| Works on the same Wi-Fi, fails across networks | Free public TURN server unreliable | Use a dedicated TURN server |
+
+---
+
+## Final demo checklist (end of Week 3)
+
+**Setup (before the call)**
+- [ ] `ollama serve` running with `llama3.2:3b`
+- [ ] Backend shows `[STARTUP] Ready` (STT device `cuda` if available)
+- [ ] Frontend running; `BACKEND ONLINE` and all system chips visible
+- [ ] Conversation, Emotion Test Mode and latency turns cleared; saved audit runs kept
+
+**Live demo (~6 minutes)**
+1. **Status:** show `BACKEND ONLINE` and the system chips (models, GPU, devices).
+2. **Connect:** START MIC ΓåÆ CONNECT; ICE `connected`, mic meter in the green zone.
+3. **Conversation:** *"Hello, who's this?"*; show the transcript, the reply typing in, and **Auralis speaking it** (AI SPEAKING state, TTFA badge).
+4. **Emotion ΓåÆ voice:** say something upset (*"I say stop!"*); show the **angry** badge, *by words*, and the **calm voice** reply.
+5. **Voice vs words:** point at the voice guess, the words guess and which one decided.
+6. **Emotion Test Mode:** pick *sad*, say *"I'm very sad today"*; show final / voice-only / words-only scoring.
+7. **Echo filter:** show the echo counter; Auralis does not answer its own voice.
+8. **Latency breakdown:** stacked bars, slowest stage, p50/p95 vs the 800 ms target.
+9. **Compare machines:** saved runs (GPU vs CPU) side by side; explain the path to 800 ms.
+
+**Evidence to keep:** screenshots of the conversation with emotion and voice badges, Emotion Test Mode results, latency breakdown, the audit table, and the exported CSVs.
+
+---
+
+## Progress log
+
+### Week 1: WebRTC foundation Γ£à
+
+| Day | Work |
+|---|---|
+| 1 | Vite + React scaffold, ESLint, microphone capture with `getUserMedia` |
+| 2 | `RTCPeerConnection`, mic track attached, SDP offer generated |
+| 3 | Offer sent to `/webrtc/offer`, answer applied, STUN/TURN configured |
+| 4 | Remote audio playback via `ontrack`; round trip verified |
+| 5 | Error handling for mic, configuration, HTTP and connection failures |
+
+### Week 2: VAD, LLM & mid-project review Γ£à
+
+| Day | Work |
+|---|---|
+| 1ΓÇô3 | DataChannel (`vad-state`), VAD badge, transcripts, frame filtering |
+| 4ΓÇô5 | Speech ΓåÆ text latency check; transcription audit panel (exposed and helped fix 8 pipeline bugs) |
+| 6 | Live mic level meter; faster ICE gathering; connection diagnostics |
+| 7 | Documentation and demo checklist |
+| + | Conversation panel with streamed LLM reply, TTFT metrics, UI polish |
+
+### Week 4: interruption, polish, training & deployment Γ£à
+
+| Work |
+|---|
+| Barge-in UI (interrupted state, Stop button, dropped-audio info) |
+| Waveform visualiser for user + AI audio, animated orb, Experience / Engineer views |
+| Crisis negotiation training mode: agitation meter, per-turn reasons, score card |
+| Arousal / valence emotion map |
+| 12 training scenarios with a picker, difficulty badges and Random |
+| Deployed on Vercel with env-based backend URL and Metered TURN |
+
+### Week 3: emotion, voice & latency Γ£à
+
+| Day | Work |
+|---|---|
+| 1 | AI audio track status, incoming packet counter, autoplay recovery button |
+| 2 | Emotion badges on every turn, emotion card, low-confidence ΓåÆ neutral fallback |
+| 3 | AI SPEAKING state, **TTFA** card, voice-style badges, echo-ignored counter |
+| 4 | Latency breakdown panel: per-stage bars, p50 / p95, slowest stage |
+| 5 | Voice vs words emotion badge (fusion source), **Emotion Test Mode** with confusion grid + CSV |
+| 6 | Live backend status + system chips from `/health`; **Latency Audit** to compare machines (CPU vs GPU) + CSV |
+| 7 | Health-check fix (only a real Auralis reply counts as online), Vite modes to switch backends, this README and the final demo checklist |
+
+---
+
+## Known limitations
+
+- **Latency is above the 800 ms target:** ~2.7 s to the first audio with GPU Whisper on a 4 GB laptop GPU (RTX 2050). About 0.7 s of that is the deliberate end-of-speech wait; Llama and Piper share the same small GPU.
+- **Live demo depends on a laptop:** when the backend laptop is off, the deployed page shows "Backend offline".
+- **Voice-only emotion is weak on real speakers;** the fused voice + words result is what the UI shows.
+- **Piper instead of XTTS-v2 in the live system:** XTTS carried more emotion in tests but is too slow on a 4 GB GPU for real time.
+- Saved audit runs live in the browser's `localStorage` (export CSV to keep them).
+
+---
+
+## Tech stack
+
+React 19 ┬╖ Vite 8 ┬╖ native WebRTC (`RTCPeerConnection`, `RTCDataChannel`, `getUserMedia`, `getStats`) ┬╖ Web Audio API (`AnalyserNode`) ┬╖ `localStorage` ┬╖ ESLint
+
+## Project structure
+
+```
+frontend/
+Γö£ΓöÇΓöÇ src/
+Γöé   Γö£ΓöÇΓöÇ App.jsx            # WebRTC client, DataChannel protocol, emotion + voice + latency panels, audit
+Γöé   Γö£ΓöÇΓöÇ App.css            # "Midnight Aurora" theme and layout
+Γöé   Γö£ΓöÇΓöÇ ui-polish.css      # Bubbles, badges, chips, test grid, audit table
+Γöé   ΓööΓöÇΓöÇ main.jsx
+Γö£ΓöÇΓöÇ .env                   # own backend URL (+ TURN), not committed
+Γö£ΓöÇΓöÇ .env.priya.local       # teammate's backend URL, not committed
+Γö£ΓöÇΓöÇ package.json
+ΓööΓöÇΓöÇ vite.config.js
+```

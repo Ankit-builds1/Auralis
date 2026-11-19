@@ -1,0 +1,5 @@
+test_set,clips,crema+ours_acc,multi_acc,crema+ours_3group,multi_3group
+CREMA-D test actors,1148,0.735,0.721,0.798,0.785
+RAVDESS actors 21-24,208,0.587,0.784,0.721,0.837
+TESS 20% (same 2 voices),480,0.569,0.996,0.583,0.996
+our voices (held out),36,0.556,0.417,0.611,0.528
