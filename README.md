@@ -66,4 +66,7 @@ Open the local URL printed by Vite. Check backend health, then start the microph
 ## Team
 
 | Member | Role | Owns |
-|
+|---|---|---|
+| **Ankit Dash** | Frontend & Real-Time UI | WebRTC client, live dashboard, latency instrumentation, conversation UI |
+| **Priya Nirmal** | Backend & Streaming | aiortc server, VAD, STT pipeline, LLM integration, audio streaming |
+| **Siddhant** | ML & Generative Models | Emotion recognition, feature engineering, LLM prompting, TTS |
