@@ -2252,6 +2252,10 @@ function App() {
     replayTimersRef.current.forEach(clearTimeout);
     replayTimersRef.current = [];
     setReplay(null);
+    setAiPackets(0);
+    setFrameCount(0);
+    setAiAudio('waiting');
+    setVadState('idle');
   };
 
   const startReplay = (session, speed = 'fast') => {
@@ -2565,6 +2569,7 @@ function App() {
             title={healthError ? `health check failed: ${healthError}` : HEALTH_URL}
           >
             <span className="status-dot"></span>
+            {replay && 'LIVE '}
             {health
               ? `BACKEND ONLINE${healthMs !== null ? ` · ${healthMs} MS` : ''}`
               : healthError
@@ -2756,7 +2761,7 @@ function App() {
 
             <section className="xp-chat-card">
               <div className="xp-chat-head">
-                <span>Conversation</span>
+                <span>{replay ? 'Recorded conversation' : 'Conversation'}</span>
                 {turns.length > 0 && (
                   <button className="xp-link" onClick={clearHistory}>Clear</button>
                 )}
@@ -2954,7 +2959,7 @@ function App() {
           <section className="card">
             <div className="card-title">
               <h2>Connection</h2>
-              <span>WEBRTC</span>
+              <span>{replay ? 'RECORDED SESSION' : 'WEBRTC'}</span>
             </div>
 
             <div className="connection-grid">
@@ -2976,7 +2981,7 @@ function App() {
                 <div className="metric-value">{turns.length}</div>
               </div>
               <div className="metric">
-                <div className="metric-label">AI audio</div>
+                <div className="metric-label">{replay ? 'Recorded AI audio' : 'AI audio'}</div>
                 <div className={`metric-value ${getAiAudioClass(aiAudio)}`}>{aiAudio}</div>
               </div>
               <div className="metric">
@@ -3107,7 +3112,7 @@ function App() {
 
           <section className="card full">
             <div className="card-title">
-              <h2>Conversation</h2>
+              <h2>{replay ? 'Recorded conversation' : 'Conversation'}</h2>
               <span>
                 WHISPER + WAVLM + TEXT → LLAMA 3 → PIPER
                 {turns.length > 0 && (
