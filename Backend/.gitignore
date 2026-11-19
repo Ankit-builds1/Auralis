@@ -1,0 +1,23 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+# Generated ML model artifacts
+*.joblib
+
+# Backup/archive files
+*.zip
+
+models/tts/
+
+*.wav
+
+logs/
+
+# Week 4: keep local-only files out of git
+venv/
+*.onnx
+*.onnx.json
+*.bak
+hf-cache/
