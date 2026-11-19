@@ -1,72 +1,426 @@
-# Auralis
+<div align="center">
 
-Auralis is a voice-to-voice assistant and a crisis negotiation training simulator. In assistant mode, a user speaks and Auralis answers out loud. In training mode, the user practises a difficult conversation with a simulated caller and sees how each turn changes the caller’s agitation.
+# 🎙️AURALIS
+
+### Real-Time Voice-to-Voice Emotion Engine
+
+*Speak naturally. Auralis listens, understands what you said **and how you said it**, and talks back, in real time.*
+
+![React](https://img.shields.io/badge/React-Vite-61DAFB?logo=react&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![WebRTC](https://img.shields.io/badge/WebRTC-aiortc-333333?logo=webrtc&logoColor=white)
+![Whisper](https://img.shields.io/badge/STT-Faster--Whisper-74aa9c)
+![Llama](https://img.shields.io/badge/LLM-Llama%203%20via%20Ollama-0467DF)
+![Status](https://img.shields.io/badge/status-Week%202%20complete-8b7dff)
 
 **Infotact Solutions · Advanced Generative AI Engineering (Vol. II) · Project 2**
 
-[Open the deployed frontend](https://auralis-hazel.vercel.app/) · [Mid-review snapshot](https://github.com/Ankit-builds1/Auralis/blob/91702177c873b26798c11561d6f5efb3511ccf38/README.md)
+</div>
+
+---
+
+> **Final review update.** The architecture diagrams and Week 2 results below document our mid-review milestone. For the implemented Week 3–4 pipeline, demo walkthrough, and integrated source on `main`, jump to [What we added after the mid-review](#what-we-added-after-the-mid-review).
+
+## 📌 Table of Contents
+
+1. [The Problem](#-the-problem)
+2. [What Auralis Does](#-what-auralis-does)
+3. [System Architecture](#-system-architecture)
+4. [How One Conversation Turn Works](#-how-one-conversation-turn-works)
+5. [Tech Stack](#-tech-stack)
+6. [Repository & Branch Structure](#-repository--branch-structure)
+7. [Module Deep Dive](#-module-deep-dive)
+8. [Real-Time Message Protocol](#-real-time-message-protocol)
+9. [Measured Results (Mid-Project Review)](#-measured-results-mid-project-review)
+10. [What we added after the mid-review](#what-we-added-after-the-mid-review)
+11. [Getting Started](#-getting-started)
+12. [Roadmap & Progress](#-roadmap--progress)
+13. [Engineering Decisions & Trade-offs](#-engineering-decisions--trade-offs)
+14. [Team](#-team)
+
+---
+
+## 🧩 The Problem
+
+Most conversational AI uses a slow, three-step pipeline:
+
+```
+Speech-to-Text  →  Text LLM  →  Text-to-Speech
+```
+
+This causes two problems:
+
+| Problem | Effect |
+|---|---|
+| **High latency** | Each stage waits for the previous one to finish completely, so replies take **3–5 seconds**. |
+| **Lost emotion** | The LLM only reads text. It never hears the user's **tone** (panic, anger, sadness), so it cannot respond to how the person actually feels. |
+
+## 💡 What Auralis Does
+
+Auralis is a **streaming, emotion-aware voice engine**. The target use case is a **Crisis Negotiation Training Simulator**: a trainee speaks in a panicked voice, and the AI responds with a calm, de-escalating reply whose **tone matches the situation**.
+
+- 🎧 **Streams microphone audio** to the backend over **WebRTC** (UDP), not slow HTTP uploads
+- 🗣️ **Detects exactly when you stop speaking** with Silero VAD
+- 📝 **Transcribes** the sentence with Faster-Whisper
+- 💭 **Classifies the emotion in your voice** from the raw audio (CREMA-D-trained model)
+- 🤖 **Replies through a local Llama 3** with an "Auralis" persona, streamed **token by token**
+- 🔊 *(Week 3)* **Speaks the reply** with emotion-conditioned TTS, streamed back in audio chunks
+- 📊 **Measures every step** live on the dashboard: STT latency, **TTFT**, full reply time, VAD segments
+
+Everything runs **locally**, with no cloud AI APIs, for privacy and full control over latency.
+
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart LR
+    subgraph Browser["🖥️ Frontend · React + Vite"]
+        MIC["🎙️ Microphone<br/>getUserMedia"]
+        UI["📊 Dashboard<br/>Conversation · TTFT · Audit"]
+        SPK["🔊 AI Audio Player"]
+    end
+
+    subgraph Server["⚙️ Backend · Python aiortc + aiohttp"]
+        RX["WebRTC Audio<br/>Receiver"]
+        VAD["Silero VAD<br/>+ Segmenter"]
+        STT["Faster-Whisper<br/>base.en"]
+        LLM["Llama 3 · Ollama<br/>streaming"]
+        TTS["TTS Track<br/>(Week 3)"]
+    end
+
+    subgraph ML["🧠 ML · Emotion"]
+        EMO["Emotion Classifier<br/>CREMA-D · SVM"]
+    end
+
+    MIC -- "Opus audio · UDP" --> RX
+    RX --> VAD
+    VAD -- "finished segment" --> STT
+    VAD -. "segment audio" .-> EMO
+    STT -- "transcript" --> LLM
+    EMO -. "emotion label" .-> LLM
+    LLM -- "reply text" --> TTS
+    TTS -- "audio chunks" --> SPK
+
+    VAD -- "DataChannel events" --> UI
+    STT -- "transcript + stt_ms" --> UI
+    LLM -- "llm_token + ttft_ms" --> UI
+```
+
+> Solid lines are live today. Dotted lines are being connected in Week 3.
+
+**Key design rule:** the audio **frame loop never waits** for Whisper or the LLM. VAD runs on every 20 ms frame, while transcription and the LLM reply run as **background tasks**. Audio keeps flowing, and the VAD keeps listening, even while Auralis is thinking.
+
+---
+
+## 🔁 How One Conversation Turn Works
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 🧑 User
+    participant F as Frontend
+    participant B as Backend (VAD)
+    participant W as Whisper
+    participant L as Llama 3
+
+    U->>F: Speaks into mic
+    F->>B: Audio frames (WebRTC, 20 ms each)
+    B-->>F: vad: speaking
+    Note over B: ~700 ms of silence → end of speech
+    B-->>F: vad: processing
+    B->>W: Speech segment (background task)
+    W-->>B: Transcript
+    B-->>F: transcript + stt_ms
+    B->>L: Transcript + last 3 exchanges
+    L-->>B: First token
+    B-->>F: llm_token (first) + ttft_ms
+    L-->>B: More tokens…
+    B-->>F: llm_token × N (typed live in the UI)
+    B-->>F: llm_done + total_ms
+    B-->>F: vad: idle
+```
+
+All timings are measured **from the moment the VAD detects end of speech**, which is the moment the user starts waiting.
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology | Why |
+|---|---|---|
+| **Frontend** | React 19 + Vite 8 | Fast dev loop, simple state for a live dashboard |
+| **Transport** | WebRTC (browser) ↔ **aiortc** (Python) | Low-latency UDP audio + a DataChannel for live events |
+| **Signaling** | aiohttp `POST /webrtc/offer` | One SDP offer/answer exchange, then everything is peer-to-peer |
+| **NAT traversal** | STUN + TURN (config in `.env`) | Works across different networks; tested with **ngrok** |
+| **Voice Activity Detection** | **Silero VAD** (ONNX) | Accurate end-of-speech detection on 32 ms chunks |
+| **Speech-to-Text** | **Faster-Whisper** `base.en` (int8, CPU) | Local, accurate English STT with prompt biasing |
+| **LLM** | **Llama 3.2 3B** via **Ollama** | Local, streamed, with conversation memory |
+| **Emotion** | Temporal acoustic features + SVM (RBF) | Trained on **CREMA-D** (7,442 clips, 6 emotions) |
+| **TTS** *(Week 3)* | XTTSv2 / Bark | Zero-shot, emotion-conditioned voice |
+
+---
+
+## 🌿 Repository & Branch Structure
+
+Each team member owns one branch. `main` holds the project documentation.
+
+| Branch | Owner | Contents |
+|---|---|---|
+| `main` | Team | This README: architecture, protocol, progress |
+| [`frontend`](../../tree/frontend) | **Ankit Dash** | `frontend/`: React dashboard, WebRTC client |
+| [`Backend`](../../tree/Backend) | **Priya Nirmal** | `Backend/`: aiortc server, VAD, STT, LLM streaming |
+| [`ML`](../../tree/ML) | **Siddhant** | `ml/`: emotion dataset, features, models, LLM prompts |
+
+```
+Auralis/
+├── frontend/                       # branch: frontend
+│   ├── src/App.jsx                 # WebRTC client, DataChannel handler, dashboard
+│   ├── src/App.css                 # "Midnight Aurora" theme
+│   └── src/ui-polish.css           # Conversation panel, metric styling
+│
+├── Backend/                        # branch: Backend
+│   ├── app/main.py                 # aiohttp app, model warm-up at startup
+│   ├── app/webrtc/                 # server.py · audio_track.py · tts_track.py
+│   ├── app/audio/vad/detector.py   # Silero VAD (stateful resampler)
+│   ├── app/audio/processor.py      # segmenting: pre-roll, hangover, min-voice filter
+│   ├── app/stt/                    # transcriber.py · engine.py (shared Whisper)
+│   ├── app/llm/ollama_client.py    # async streaming Llama client
+│   └── tests/                      # pytest suite
+│
+└── ml/                             # branch: ML
+    ├── src/features/               # MFCC, spectral, prosodic, temporal features
+    ├── src/models/                 # training, tuning, inference
+    ├── src/llm/                    # persona + emotion-aware prompts
+    └── results/                    # confusion matrices, experiment logs
+```
+
+---
+
+## 🔬 Module Deep Dive
+
+<details>
+<summary><b>🎙️ Frontend: WebRTC client & live dashboard</b> (Ankit)</summary>
+
+<br/>
+
+- **Mic capture** with browser echo cancellation, noise suppression and auto-gain (stronger, cleaner signal for VAD and Whisper)
+- **WebRTC handshake** with smart ICE gathering: stops early once a TURN relay candidate is ready, with a 3 s timeout
+- **Live mic level meter** (dB), updated through refs at 60 fps without re-rendering React
+- **Conversation panel:** your sentence and Auralis's reply as chat bubbles, with the reply **typed live token by token**
+- **Latency dashboard:** Speech→Text, **TTFT**, average TTFT, full reply time, colour-coded against the 800 ms target
+- **Transcription Audit:** every VAD segment with speech length, silence wait, gap before, and whether it was transcribed
+- **AI audio status:** detects the remote audio track, packet counter, autoplay-blocked recovery
+- Performance-safe: frame counter throttled (50 msgs/s → 5 renders/s); segment↔transcript matching via a FIFO queue
+
+</details>
+
+<details>
+<summary><b>⚙️ Backend: streaming pipeline</b> (Priya)</summary>
+
+<br/>
+
+- **aiortc server**: receives the browser's mic track, sends an outgoing audio track (for TTS) and a DataChannel
+- **Silero VAD**: 48 kHz → 16 kHz with a **stateful** resampler (no clicks at frame edges); threshold 0.5; start after 3 speech chunks (~96 ms), end after 22 silence chunks (~700 ms)
+- **Segmenter**: 300 ms pre-roll (first syllable is never cut), 100 ms hangover, **minimum 200 ms of real voice** (coughs and desk taps never reach Whisper), forced split at 15 s
+- **Faster-Whisper `base.en`**: `beam_size=5`, `initial_prompt` with project names and terms, `condition_on_previous_text=False`, hallucination filter (`no_speech_prob` + known phantom phrases like *"Thank you."*)
+- **Non-blocking turns**: Whisper + LLM run as background tasks; the audio loop never stalls
+- **Model warm-up at startup**: Whisper and Llama are loaded before the first user connects
+- **Async streaming LLM client** (aiohttp), sending `llm_token` events as tokens arrive, plus `ttft_ms` and `total_ms`
+
+</details>
+
+<details>
+<summary><b>🧠 ML: emotion recognition & LLM persona</b> (Siddhant)</summary>
+
+<br/>
+
+- **Dataset:** CREMA-D, 7,442 clips, 91 actors, 6 emotions (angry, disgust, fear, happy, neutral, sad), with actor-independent train / validation / test splits
+- **Feature engineering:** MFCC + deltas, spectral and energy features, prosody, and **temporal features (2,400 dimensions)**
+- **Experiments:** Random Forest baseline → SVM (linear / RBF) → class-weight tuning → **noise-augmented training** for robustness
+- **Best model:** Temporal SVM (RBF): **48.9 % test accuracy, 0.48 macro-F1** on 6 classes (chance = 16.7 %)
+- **LLM persona:** concise, empathetic "Auralis" with 1–2 sentence replies; the detected emotion is passed as *possibly-imperfect* context
+- **Streaming Ollama client** (token generator), integrated into the backend
+
+</details>
+
+---
+
+## 📡 Real-Time Message Protocol
+
+All live events travel from backend to frontend over the WebRTC **DataChannel** as JSON.
+
+| `type` | When | Key fields |
+|---|---|---|
+| `audio_frame` | Every 20 ms frame | `frame`, `is_speech`, `segment_started`, `segment_finished`, `sample_rate`, `samples` |
+| `vad` | Speech state changes | `vad_state`: `speaking` / `processing` / `idle` |
+| `transcript` | Whisper finished | `text`, `stt_ms` |
+| `llm_start` | LLM begins replying | — |
+| `llm_token` | Each streamed token | `text`, `first`, `ttft_ms` *(first token only)* |
+| `llm_done` | Reply complete | `text`, `ttft_ms`, `total_ms`, `tokens` |
+| `llm_error` | Ollama unreachable / failed | `error` |
+| `audio_error` | Frame processing failed | `frame`, `error` |
+
+**Timing definitions** (all measured from the end of the user's speech):
+
+| Metric | Meaning |
+|---|---|
+| `stt_ms` | End of speech → transcript ready |
+| `ttft_ms` | End of speech → **first word** from the LLM *(mid-project "Latency Check")* |
+| `total_ms` | End of speech → **last word** from the LLM |
+
+---
+
+## 📊 Measured Results (Mid-Project Review)
+
+Measured live on a laptop **CPU** (no GPU), across two networks connected through ngrok.
+
+### ✅ Transcription Audit
+
+| Check | Result |
+|---|---|
+| Segments detected vs transcribed | **5 / 5** |
+| Silence wait after speech | **~100 ms hangover** on top of the 700 ms VAD window |
+| Full sentences kept together | ✅ e.g. *"What are you doing? I am currently watching Big Boss."* |
+| Names and project terms | ✅ *"Ankit Dash"*, *"Priya"*, *"Siddhant"*, *"Auralis"* |
+| Noise / coughs | ✅ filtered before Whisper (no phantom *"Thank you."*) |
+
+### ⏱️ Latency Check
+
+| Stage | Measured | PDF target |
+|---|---|---|
+| Speech → Text (Whisper `base.en`, CPU) | **~1.2 s** | < 200 ms |
+| TTFT, Llama 3 **8B** on CPU | 2.6 – 8.9 s | — |
+| TTFT, Llama 3.2 **3B** on CPU | *re-measuring* | — |
+| End-to-end voice reply | *Week 3* | < 800 ms |
+
+**Where the time goes:** about 0.7 s is the deliberate silence window, so sentences are not cut mid-thought. The rest is Whisper and the LLM on CPU. `ollama ps` showed Llama 3 8B at **100 % CPU**, so we switched to **Llama 3.2 3B**. The sub-800 ms target needs **GPU inference**; the architecture (streaming, background tasks, warm-up) is already built for it.
+
+---
 
 ## What we added after the mid-review
 
-At mid-review, we could stream microphone audio to the backend, detect the end of a sentence, transcribe it with Faster-Whisper, and display a local Llama reply token by token. We had also trained a separate acoustic emotion classifier. Our transcription audit captured **5 out of 5** speech segments. The remaining work was to bring emotion into the conversation, let the user hear and interrupt the reply, and turn the engine into a training experience.
+At mid-review, a user could speak into the browser and watch Llama’s reply appear token by token. By the final review, the user could hear that reply, interrupt it, and practise a negotiation with a simulated caller. We also added a way to replay a recorded session and inspect the decisions behind each turn.
 
-| Area | What we added | What a reviewer can see |
+| Addition | How it works | What to show in the final review |
 |---|---|---|
-| Spoken replies | Piper synthesises the first phrase while Llama continues generating text. The backend streams the audio back over WebRTC and selects a voice style for the situation. | The reply appears as text and plays through the browser. The dashboard measures when the first audio arrives. |
-| Emotion from voice and words | We added a WavLM-based voice classifier, adapted it using team recordings, and combined it with a DistilRoBERTa text classifier. Confidence thresholds and a personal voice baseline help handle uncertain predictions. | Engineer view shows the voice prediction, the text prediction, and the emotion Auralis used. |
-| Interruptions | The user can speak over Auralis or press Stop. The backend cancels the current reply and clears queued audio. A loudness check helps distinguish the user from speaker echo. | The interrupted reply is marked in the conversation. The dashboard reports how long the voice took to stop. |
-| Negotiation training | We built **12 scenarios** with distinct callers and starting conditions. Rules update simulated agitation from tone, wording, and interruptions. Llama uses the updated score when playing the caller. | The trainee sees the agitation meter, reasons for each change, and an end-of-session score. |
-| Review and replay | We added Experience and Engineer views, waveforms for both voices, emotion testing, latency breakdowns, and controls to save, export, import, and replay sessions. Replay labels distinguish recorded metrics from live backend health. | A reviewer can replay a saved conversation and inspect individual turns even while the backend is offline. |
-| Deployment | The React frontend is hosted on Vercel. A team laptop runs the Python backend and models. A Cloudflare Tunnel carries HTTPS signalling, and WebRTC uses a TURN relay when needed for audio. | The frontend reports backend health separately. A live microphone conversation requires a reachable backend. |
+| **Spoken replies** | Piper synthesises the first available phrase while Llama continues writing. WebRTC carries the generated audio back to the browser. | Compare the time to the first text token with the time to the first audible reply. |
+| **Voice + text emotion recognition** | WavLM analyses vocal delivery, and DistilRoBERTa analyses the transcript. The backend combines their predictions using confidence thresholds and a personal voice baseline. | In the recorded “I’m feeling very exhausted” turn, voice predicted *disgust* and words predicted *sad*. The combined result was *sad* at 71%, and Auralis used its soft voice. |
+| **Interruption handling** | When the user speaks over a reply, the backend cancels generation and clears queued audio. A relative loudness check helps distinguish the user from speaker echo. | Find a reply marked **interrupted** and inspect how long the voice took to stop. |
+| **Negotiation training** | Across 12 scenarios, the user plays the trainee and Llama plays the caller. The simulator updates the caller’s agitation using the trainee’s tone, wording, and interruptions. | In the locked-in office worker walkthrough, agitation went from **85 to 9** in five turns. The scorecard explains the changes. |
+| **Dashboard and replay** | Experience view presents the conversation. Engineer view adds waveforms, emotion predictions, and per-stage timings. Sessions can be saved, exported, imported, and replayed. | Open a saved session and click **Replay**. The dashboard labels recorded audio separately from live backend health. |
+| **Deployment and integration** | Vercel serves the frontend. The team laptop runs the models, Cloudflare Tunnel carries HTTPS signalling, and TURN can relay WebRTC audio. The three components now share the same `main` branch. | Open the deployed dashboard for a replay. For a live conversation, connect the backend and start the microphone. |
 
-## How a live turn works
+### What the measurements showed
 
-1. The React client streams microphone audio over WebRTC. Silero VAD detects speech and the pause at the end of the turn.
-2. Faster-Whisper produces the transcript. WavLM analyses the voice, and DistilRoBERTa analyses the words. The backend combines their predictions.
-3. In assistant mode, Llama receives conversation context and an emotion cue. In training mode, the simulator updates the caller’s agitation and supplies the scenario and current state.
-4. Ollama streams Llama’s reply. Piper synthesises phrases as they become available. The browser plays the audio and displays transcript, emotion, timing, and interruption events.
+- **Emotion recognition.** The mid-review SVM scored **48.9%** on six-class CREMA-D recognition. WavLM Large reached **74.6%** on held-out actors. On 36 held-out recordings from our team, speaker adaptation raised accuracy from **19.4% to 52.8%**. [WavLM benchmark](ml/results/week3_ssl/wavlm-large_summary.csv) · [Speaker adaptation](ml/results/week3_adapt/wavlm-large_adapt_summary.csv)
+- **Audible reply latency.** In a 10-turn localhost audit on Ankit’s laptop with Whisper on CPU, the first audible reply took **4.78 s at p50** and **13.33 s at p95**. The **800 ms** end-to-end goal remains open. [Frontend latency audit](docs/frontend-README.md)
 
-## What we measured
+[Open the Vercel demo](https://auralis-hazel.vercel.app/) · [Frontend](frontend/) · [Backend](Backend/) · [ML](ml/) · [Training and deployment notes](docs/Backend-README.md)
 
-| Check | Recorded result | Interpretation |
-|---|---|---|
-| Voice emotion on CREMA-D | **48.9%** six-class accuracy for the mid-review temporal SVM and **74.6%** for WavLM Large | The newer model improved recognition on held-out actors. [WavLM results](ml/results/week3_ssl/wavlm-large_summary.csv) |
-| Speaker adaptation | **19.4% → 52.8%** on **36 held-out team recordings** | Adaptation helped on our voices. The small sample limits what we can conclude about other speakers. [Adaptation results](ml/results/week3_adapt/wavlm-large_adapt_summary.csv) |
-| Time to first audible reply | **4.78 s p50** and **13.33 s p95** over **10 localhost turns** on Ankit’s laptop with Whisper on CPU | This measures the wait for speech, including transcription, reply generation, and synthesis. The **800 ms** end-to-end goal remains open. [Latency audit](docs/frontend-README.md) |
-| Negotiation walkthrough | In the locked-in office worker scenario, agitation moved from **85 to 9** over **5 turns**, with a final score of **86/100**. | This is one run of the simulator’s scoring rules. [Training results](docs/Backend-README.md) |
+---
 
-## Run the project
+## 🚀 Getting Started
 
-The `main` branch contains [the frontend](frontend/), [the backend](Backend/), and [the ML experiments](ml/). For a recorded review, open the deployed frontend, select a saved session or load an exported session, and choose **Replay**. Use **Engineer** view to inspect individual turns.
+### Prerequisites
 
-For a live session on Windows, run the following from the repository root in separate terminals. Start Ollama first. The backend configuration lists the trained emotion bundle and Piper voice files required for the full demo. [Backend configuration](Backend/.env.example)
+- **Python 3.12**, **Node.js 18+**
+- **[Ollama](https://ollama.com)** with the model pulled:
+  ```bash
+  ollama pull llama3.2:3b
+  ```
 
-**Backend (PowerShell)**
+### 1 · Backend (`Backend` branch)
 
-```powershell
+```bash
+git checkout Backend
 cd Backend
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
-ollama pull llama3.2:3b
-.\.venv\Scripts\python.exe -m app.main
+python -m venv .venv
+.venv\Scripts\activate          # Windows  (macOS/Linux: source .venv/bin/activate)
+pip install -r requirements.txt
+copy .env.example .env          # sets PORT=8001  (macOS/Linux: cp)
+python -m app.main
 ```
 
-**Frontend (PowerShell)**
+Wait for:
 
-```powershell
+```
+[STT] Warm-up done in ... ms
+[LLM] Warm-up done (model=llama3.2:3b)
+[STARTUP] Ready
+```
+
+Health check: `GET http://localhost:8001/health` → `{"status": "ok"}`
+
+> Testing across two networks? Expose the backend with `ngrok http 8001` and use the ngrok URL as `VITE_BACKEND_URL`.
+
+### 2 · Frontend (`frontend` branch)
+
+```bash
+git checkout frontend
 cd frontend
-npm ci
-$env:VITE_BACKEND_URL = "http://localhost:8001"
+npm install
+```
+
+Create `frontend/.env` (never commit this file):
+
+```env
+VITE_BACKEND_URL=http://localhost:8001
+VITE_TURN_URL=turn:your-turn-server:80
+VITE_TURN_USERNAME=your-username
+VITE_TURN_CREDENTIAL=your-password
+```
+
+```bash
 npm run dev
 ```
 
-Open the local URL printed by Vite. Check backend health, then start the microphone and connect. Deployment settings, model setup, and experiment instructions are in the [frontend notes](docs/frontend-README.md), [backend notes](docs/Backend-README.md), and [ML report](docs/ML-README.md).
+Open **http://localhost:5173** → **START MIC** → **CONNECT** → start talking.
 
-## Team
+---
+
+## 🗺️ Roadmap & Progress
+
+| Week | Audio ML & Generative Models | Streaming Architecture | Status |
+|---|---|---|---|
+| **1** | Local STT with Faster-Whisper | React app + aiortc server, bi-directional WebRTC audio | ✅ Done |
+| **2** | LLM integration: Llama 3 via Ollama with a conversational persona | Silero VAD: exact end-of-speech detection | ✅ Done |
+| **Mid-Review** | Transcription Audit | Latency Check (TTFT) | ✅ Done |
+| **3** | Emotion-conditioned zero-shot TTS (calm vs panicked) | Chunked TTS audio streaming over WebRTC | 🔄 In progress (outgoing audio track ready) |
+| **4** | Full-duplex interruption handling | Live waveform visualizer (user + AI) | ⏳ Planned |
+| **Final** | STT + emotion + LLM + TTS running concurrently | Sub-second, emotionally resonant conversation | ⏳ Planned |
+
+---
+
+## ⚖️ Engineering Decisions & Trade-offs
+
+| Decision | Why | Trade-off |
+|---|---|---|
+| **WebRTC instead of HTTP/WebSocket uploads** | UDP transport, built-in Opus codec, jitter buffering, echo cancellation | More complex setup (SDP, ICE, TURN) |
+| **700 ms silence window** | Keeps full sentences together; short pauses and "uh" no longer split them | Adds ~0.7 s before transcription starts |
+| **`beam_size=5` + `initial_prompt` in Whisper** | Fixed mishearings like *"Ankida"* → *"Ankit Dash"*, *"BTEK"* → *"BTech"* | Slower than greedy decoding |
+| **Minimum-voice filter (200 ms)** | Coughs and taps never reach Whisper, which removed phantom transcripts | Very short words on their own may be skipped |
+| **Background turn tasks** | The audio loop never blocks, which is required for Week 4 interruptions | Overlapping turns must be serialized (lock) |
+| **Model warm-up at startup** | The first reply isn't slowed by model loading | Slower server start |
+| **Llama 3.2 3B instead of Llama 3 8B** | 8B ran at 100 % CPU with TTFT up to ~9 s | Slightly less capable replies |
+| **Local models only** | Privacy, no API cost, full latency control | Hardware-bound speed (GPU recommended) |
+
+---
+
+## 👥 Team
 
 | Member | Role | Owns |
 |---|---|---|
 | **Ankit Dash** | Frontend & Real-Time UI | WebRTC client, live dashboard, latency instrumentation, conversation UI |
 | **Priya Nirmal** | Backend & Streaming | aiortc server, VAD, STT pipeline, LLM integration, audio streaming |
 | **Siddhant** | ML & Generative Models | Emotion recognition, feature engineering, LLM prompting, TTS |
+
+---
+
+<div align="center">
+
+**Auralis** · built for the Infotact Solutions Advanced Generative AI Engineering programme
+
+*Real-time · Local-first · Emotion-aware*
+
+</div>
