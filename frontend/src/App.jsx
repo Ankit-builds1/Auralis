@@ -2521,6 +2521,29 @@ function App() {
     await connectWebRTC();
   };
 
+  const interruptedReplies = replay?.done && view === 'engineer'
+    ? turns.filter((turn) => turn.interrupt)
+    : [];
+  const currentInterruption = interruptedReplies.findIndex(
+    (turn) => turn.id === replay?.selectedInterruptionId
+  );
+
+  const jumpToNextInterruption = () => {
+    if (!interruptedReplies.length) return;
+    const next = interruptedReplies[(currentInterruption + 1) % interruptedReplies.length];
+    const bubble = document.getElementById(`interrupted-reply-${next.id}`);
+    if (!bubble) return;
+    setReplay((previous) => previous && { ...previous, selectedInterruptionId: next.id });
+    bubble.focus({ preventScroll: true });
+    bubble.scrollIntoView({ block: 'center' });
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      bubble.animate(
+        [{ boxShadow: '0 0 0 3px #c5a7ff' }, { boxShadow: '0 0 0 3px transparent' }],
+        { duration: 1500 }
+      );
+    }
+  };
+
   const formatSeconds = (ms) =>
     ms === null || ms === undefined ? '—' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 
@@ -2590,6 +2613,14 @@ function App() {
                 {replay.done ? 'finished' : `${replay.shown}/${replay.total} events`}
               </span>
               <button className="xp-link" onClick={() => startReplay(savedSessions.find((x) => x.name === replay.name), 'fast')}>Replay again</button>
+              {interruptedReplies.length > 0 && (
+                <>
+                  <button className="xp-link" onClick={jumpToNextInterruption}>Next interruption</button>
+                  <span className="rec-text" role="status">
+                    {currentInterruption >= 0 && `Interruption ${currentInterruption + 1} of ${interruptedReplies.length}`}
+                  </span>
+                </>
+              )}
               <button className="xp-link" onClick={() => { stopReplay(); clearHistory(); setTraining(null); setStatus('idle'); }}>Exit replay</button>
             </>
           ) : (
@@ -3169,6 +3200,8 @@ function App() {
                       </div>
 
                       <div
+                        id={turn.interrupt ? `interrupted-reply-${turn.id}` : undefined}
+                        tabIndex={turn.interrupt ? -1 : undefined}
                         className={`bubble bubble-ai ai-${turn.aiState}${
                           turn.voice?.speaking ? ' ai-voice-live' : ''
                         }`}
@@ -3201,7 +3234,7 @@ function App() {
                           )}
                           {turn.interrupt && (
                             <span className="bubble-badge interrupt-badge">
-                              ✋ {turn.interrupt.reason === 'manual' ? 'stopped' : 'interrupted'}
+                              ✋ {turn.interrupt.reason === 'manual' ? 'Stopped by button' : 'Interrupted by voice'}
                               {turn.interrupt.stopMs !== null && turn.interrupt.stopMs !== undefined
                                 ? ` · ${turn.interrupt.stopMs} ms`
                                 : ''}
